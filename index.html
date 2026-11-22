@@ -273,6 +273,9 @@ dialog::backdrop{background:rgba(0,0,0,.62)}
 .field{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--dim)}
 .field input{font:16px var(--f-body);padding:12px;border-radius:12px;border:1.5px solid var(--line);background:rgba(0,0,0,.28);color:var(--ivory);min-width:0}
 @media (max-width:640px){.top .tabs{order:3;flex-basis:100%}}
+/* keep scrolled content from showing through the phone status bar; drop keyboard hints on touch screens */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--room);z-index:10}
+@media (hover:none) and (pointer:coarse){kbd{display:none}}
 @media (prefers-reduced-motion:reduce){.card.in{animation:none}.tray .stack{transition:none}}
 </style>
 </head>

@@ -3,6 +3,6 @@
 // row-level security rules in supabase/schema.sql allow (each user: their own row).
 // Leave them empty to run without accounts; progress then stays on the device.
 window.TRUECOUNT_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: ''
+  supabaseUrl: 'https://tppulqaitdmtgisnisvq.supabase.co',
+  supabaseAnonKey: 'sb_publishable_Bnqkv4xr3szcmbsC7U1BBg_ry8YKOIH'
 };

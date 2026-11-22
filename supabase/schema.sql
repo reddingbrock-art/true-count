@@ -8,6 +8,9 @@ create table if not exists public.progress (
 
 alter table public.progress enable row level security;
 
+-- Newer projects do not expose new tables to the API automatically.
+grant select, insert, update on public.progress to authenticated;
+
 create policy "read own progress" on public.progress
   for select to authenticated using ((select auth.uid()) = user_id);
 create policy "insert own progress" on public.progress

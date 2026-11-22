@@ -239,6 +239,20 @@ span.chip:hover{transform:none}
   #d-focus button{white-space:nowrap}
   .hud{gap:12px 22px}
 }
+/* lessons */
+.lsteps{display:flex;flex-wrap:wrap;gap:6px}
+.ldot{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);background:transparent;color:var(--dim);font:500 13px var(--f-data);cursor:pointer;padding:0}
+.ldot.done{background:rgba(232,201,120,.16);color:var(--print)}
+.ldot.on{background:var(--print);color:var(--ink);border-color:var(--print)}
+.rules{margin:0;padding-left:20px;display:grid;gap:8px;font-size:17px;max-width:64ch}
+.rules b{color:var(--print);font-weight:700}
+.hook{background:rgba(0,0,0,.22);border-radius:12px;padding:12px 14px;max-width:64ch}
+.hook b{color:var(--print)}
+.lprog{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lprog .meter{flex:1;min-width:120px}
+#d-learn .chart td{cursor:default}
+#d-learn table.chart{min-width:0}
+#d-learn .chart th.rh{width:38px}
 /* daily workout, review, casino table, chart */
 .goal{font:500 12.5px var(--f-data);color:var(--dim)}
 .daily{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:22px 28px;align-items:center}
@@ -314,6 +328,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <ol class="steps" id="steps"></ol>
   <div class="foot">
     <p>Counting cards in your head is legal, but casinos can refuse your play. A skilled counter's edge is about 1% at best and the swings are large. <span id="foot-sync"></span></p>
+    <span style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center"><button class="link" id="fx-test">Test sound</button><span class="goal" id="fx-diag"></span></span>
     <button class="link" id="reset">Reset my progress</button>
   </div>
 </section>
@@ -321,12 +336,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <!-- STRATEGY -->
 <section class="view" id="v-strategy" hidden>
   <div class="vhead"><h1>Basic strategy</h1>
-    <p class="lede">One correct play for every hand against every dealer card. Drill until the answer arrives before you have to think.</p></div>
+    <p class="lede">One correct play for every hand against every dealer card. Learn it one rule at a time, then drill until the answer arrives before you have to think.</p></div>
   <div id="rules-strategy"></div>
   <div class="opts">
-    <div class="seg" id="d-sub"><button data-sub="drill">Drill</button><button data-sub="chart">Chart</button></div>
+    <div class="seg" id="d-sub"><button data-sub="learn">Learn</button><button data-sub="drill">Drill</button><button data-sub="chart">Chart</button></div>
     <div class="seg" id="d-focus"><button data-focus="all">All hands</button><button data-focus="h">Hard</button><button data-focus="s">Soft</button><button data-focus="p">Pairs</button><button data-focus="miss">My misses</button><button data-focus="dev">Deviations</button></div>
   </div>
+  <div class="box col" id="d-learn" hidden></div>
   <div class="cols" id="d-drill">
     <div class="col">
       <div class="felt">
@@ -344,6 +360,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
         <button class="act a-P" data-act="P">Split<kbd>P</kbd></button>
         <button class="act a-R" data-act="R">Surrender<kbd>R</kbd></button>
       </div>
+      <button class="link" id="d-hint" style="justify-self:start" hidden>Show me the rule for this hand</button>
     </div>
     <div class="col">
       <div class="fb" id="d-fb" aria-live="polite"></div>
@@ -559,7 +576,7 @@ const blank=()=>({rules:{h17:false,das:true,sur:true,decks:6},
   strat:{cells:{},recent:[],n:0,streak:0,best:0},dev:{recent:[]},
   count:{best:null,recent:[],per:1,pace:1.2,len:24,tpace:0.45,rounds:5,noise:0},tc:{recent:[],bets:[],marks:true},
   table:{hands:0,decOK:0,decN:0,cntOK:0,cntN:0,betOK:0,betN:0,others:1,every:3,speed:1,dev:0},
-  hist:{},prefs:{fx:true}});
+  hist:{},prefs:{fx:true},learn:{cur:'read',done:{}}});
 let S=blank();
 try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j)for(const k in S)S[k]={...S[k],...(j[k]||{})}}catch(e){}
 
@@ -572,9 +589,17 @@ function tally(ok){const h=S.hist[today()]||(S.hist[today()]={ok:0,n:0});h.n++;i
 function streak(){let n=0;const d=new Date();if(!(S.hist[ymd(d)]||{}).w)d.setDate(d.getDate()-1);while((S.hist[ymd(d)]||{}).w){n++;d.setDate(d.getDate()-1)}return n}
 
 // ---------- sound and haptics (synthesised, no audio files) ----------
-let AC=null,NOISE=null,GEST=false,hapEl=null;
-for(const ev of['pointerdown','keydown'])addEventListener(ev,()=>{GEST=true},{capture:true});
-function audio(){if(!GEST)return null;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();return AC}catch(e){return null}}
+let AC=null,NOISE=null,hapEl=null;
+// iOS only starts audio from inside a tap, and it mutes Web Audio whenever the ring switch is on silent unless the
+// page asks for a "playback" audio session. So: build and resume the context on every tap (capture phase, before the
+// tapped control's own handler), ask for playback, and re-resume after the app has been in the background.
+function unlock(){if(!S.prefs.fx&&!S.count.noise)return;try{
+    if(navigator.audioSession&&navigator.audioSession.type!=='playback')navigator.audioSession.type='playback';
+    const fresh=!AC;AC=AC||new(window.AudioContext||window.webkitAudioContext)();
+    if(AC.state!=='running'){AC.resume();if(fresh||AC.state==='interrupted'){const s=AC.createBufferSource();s.buffer=AC.createBuffer(1,1,22050);s.connect(AC.destination);s.start(0)}}}catch(e){}}
+for(const ev of['touchend','mouseup','click','keydown'])addEventListener(ev,unlock,{capture:true,passive:true});
+function audio(){return AC}
+function audioDiag(){return`Audio ${AC?AC.state:'not started'} · session ${navigator.audioSession?navigator.audioSession.type:'not available'}${AC?' · '+AC.sampleRate+' Hz':''}`}
 function tone(f,at,dur,type,g){const a=AC,o=a.createOscillator(),v=a.createGain(),t=a.currentTime+at;o.type=type;o.frequency.value=f;
   v.gain.setValueAtTime(0,t);v.gain.linearRampToValueAtTime(g,t+.008);v.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(v).connect(a.destination);o.start(t);o.stop(t+dur+.03)}
 function burst(dur,hp,g){const a=AC,n=Math.floor(a.sampleRate*dur),b=a.createBuffer(1,n,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
@@ -599,7 +624,10 @@ function noiseStart(){if(NOISE||!audio())return;const a=AC,len=a.sampleRate*4,b=
   NOISE={stop(){try{s.stop();lfo.stop()}catch(e){}clearInterval(blips);NOISE=null}}}
 const ICON_ON='<svg viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18.500v-13L7.500 9.500H4z"/><path d="M15.500 9a4.200 4.200 0 0 1 0 6"/><path d="M18 6.500a7.800 7.800 0 0 1 0 11"/></svg>',ICON_OFF='<svg viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18.500v-13L7.500 9.500H4z"/><path d="M16 9.500l5 5M21 9.500l-5 5"/></svg>';
 function fxUI(){const b=$('#fx-btn'),on=!!S.prefs.fx;b.innerHTML=on?ICON_ON:ICON_OFF;b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',on?'Sound and haptics on':'Sound and haptics off');b.title=on?'Sound and haptics on':'Sound and haptics off'}
-$('#fx-btn').onclick=()=>{S.prefs.fx=!S.prefs.fx;save();fxUI();fx('ok')};
+$('#fx-btn').onclick=()=>{S.prefs.fx=!S.prefs.fx;save();fxUI();if(S.prefs.fx){unlock();fx('ok')}else try{if(navigator.audioSession)navigator.audioSession.type='auto'}catch(e){}};
+$('#fx-test').onclick=()=>{const d=$('#fx-diag');if(!S.prefs.fx){d.textContent='Sound is switched off. Tap the speaker button at the top first.';return}
+  unlock();if(AC){tone(523,0,.18,'sine',.12);tone(659,.16,.18,'sine',.12);tone(784,.32,.3,'sine',.12);haptic(10)}
+  d.textContent='Playing three notes…';setTimeout(()=>{d.textContent=audioDiag()+'. No sound? Turn the volume up.'},700)};
 
 // ---------- account sync (Supabase REST, no library) ----------
 // One row per user in public.progress holds the whole saved state. Newest write wins; at sign-in the account's copy wins.
@@ -668,7 +696,7 @@ function renderRules(){for(const id of['strategy','table']){const el=$('#rules-'
   <div class="opt"><span>Surrender</span>${seg('sur',[['true','Late'],['false','None']])}</div>
   <div class="opt"><span>Decks</span>${seg('decks',[['6','6'],['8','8']])}</div></div></details>`}}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-rule]');if(!b)return;const k=b.dataset.rule;
-  S.rules[k]=k==='decks'?+b.dataset.v:b.dataset.v==='true';save();renderRules();renderChart();drillNext();tcNew();
+  S.rules[k]=k==='decks'?+b.dataset.v:b.dataset.v==='true';save();renderRules();renderChart();if(D.sub==='learn')renderLearn();drillNext();tcNew();
   $('#t-arc').innerHTML=ruleArc();$('#d-arc').innerHTML=ruleArc();if(k==='decks')tStart()});
 document.addEventListener('click',e=>{if(e.detail>0){const b=e.target.closest('button');if(b)b.blur()}});
 
@@ -702,7 +730,7 @@ function why(kind,n,up,act){
 
 // ---------- strategy drill ----------
 const CELLS=[];for(const[k,a,b]of[['h',8,18],['s',13,20],['p',2,11]])for(let n=a;n<=b;n++)for(let up=2;up<=11;up++)CELLS.push({kind:k,n,up,key:k+n+'-'+up});
-const D={focus:'all',sub:'drill',cur:null,answered:false,timer:0};
+const D={focus:'all',sub:'drill',cur:null,answered:false,timer:0,lstreak:0,lq:{id:'',rows:[]}};
 const isMiss=s=>s&&s.w>0&&s.run<3;
 function makeCards(kind,n){
   if(kind==='p')return[cd(n),cd(n)];
@@ -716,25 +744,94 @@ function pickCell(){
   $('#d-note').textContent=note;
   const w=list.map(c=>{const s=S.strat.cells[c.key];return(D.cur&&D.cur.key===c.key)?0.01:!s?1.5:isMiss(s)?5:1}),sum=w.reduce((a,b)=>a+b,0);
   let r=Math.random()*sum;for(let i=0;i<list.length;i++){r-=w[i];if(r<=0)return list[i]}return list[list.length-1]}
-function drillNext(){clearTimeout(D.timer);D.answered=false;const R=S.rules;let cur;
-  if(D.focus==='dev'){const list=I18.filter(d=>d.kind);let d;do{d=list[rnd(list.length)]}while(D.cur&&D.cur.dev===d);
+// ---------- lessons: the chart, one rule at a time ----------
+// Wording follows the house rules. Every lesson before "Surrender" is graded with surrender switched off.
+function LESSONS(){const R=S.rules,rng=(k,a,b)=>c=>c.kind===k&&c.n>=a&&c.n<=b;
+  const L=[
+  {id:'read',t:'How to read any hand',target:0,rows:[],lead:'Every decision comes from two things: your hand and the one dealer card you can see.',
+    rules:['Ask four questions in this order and stop at the first yes.','<b>1. Surrender?</b> Only a handful of terrible hands.','<b>2. Split?</b> Only when your two cards match.','<b>3. Double?</b> Only on your first two cards. You bet twice as much and take exactly one more card.','<b>4. Hit or stand?</b> Everything else.',
+      'A <b>hard</b> hand has no ace, or an ace that has to count as 1. A <b>soft</b> hand has an ace counting as 11, so one more card cannot bust it.','Dealer cards 2 through 6 are <b>bust cards</b>: the dealer has to keep drawing and often breaks. A dealer 7 through ace usually finishes with a made hand.'],
+    hook:'Against a bust card, stay out of the way and get more money down. Against a strong card, improve your hand.'},
+  {id:'stiff',t:'Hard 12 to 17: stand or hit',target:12,rows:[['h',17],['h',16],['h',15],['h',14],['h',13],['h',12]],pick:rng('h',12,17),lead:'These are the hands you will hold most often, and the ones beginners misplay.',
+    rules:['<b>17 or more:</b> always stand.','<b>12 through 16 against a dealer 2 through 6:</b> stand, and let the dealer bust.','<b>12 through 16 against a dealer 7 or higher:</b> hit. Standing loses to any made hand.','<b>The one exception:</b> hit 12 against a 2 or 3.'].concat(R.sur?['Surrender is switched off until its own lesson.']:[]),
+    hook:'Dealer shows a bust card, you stand. Dealer shows 7 or more, you hit until you reach 17.'},
+  {id:'double',t:'Hard 11 and under: when to double',target:10,rows:[['h',11],['h',10],['h',9],['h',8]],pick:rng('h',8,11),lead:'Doubling puts twice the money out when you are the favorite. You get exactly one more card.',
+    rules:[`<b>11:</b> double against ${R.h17?'every dealer card':'everything except an ace'}.`,'<b>10:</b> double against 2 through 9.','<b>9:</b> double against 3 through 6.','<b>8 or less:</b> just hit.'],
+    hook:'The smaller your total, the weaker the dealer has to be. 11 doubles against almost anything, 10 against 9 or less, 9 only against 3 to 6.'},
+  {id:'softlow',t:'Soft 13 to 17: never stand',target:12,rows:[['s',17],['s',16],['s',15],['s',14],['s',13]],pick:rng('s',13,17),lead:'An ace counted as 11 is a free shot: one card cannot bust you.',
+    rules:['<b>Soft 17 or less is never a standing hand.</b> You always hit or double.','<b>A,2 and A,3:</b> double against 5 and 6.','<b>A,4 and A,5:</b> double against 4, 5 and 6.','<b>A,6:</b> double against 3 through 6.','Against any other dealer card, hit.'],
+    hook:'The doubling window opens one card wider every two rows: 5 to 6, then 4 to 6, then 3 to 6.'},
+  {id:'softhigh',t:'Soft 18 to 20: the tricky one',target:10,rows:[['s',20],['s',19],['s',18]],pick:rng('s',18,20),lead:'Soft 18 is the most misplayed hand in the game. It is weaker than it looks.',
+    rules:[`<b>Soft 19 and soft 20:</b> stand.${R.h17?' One exception when the dealer hits soft 17: double soft 19 against a 6.':''}`,`<b>Soft 18 against ${R.h17?'2':'3'} through 6:</b> double.`,`<b>Soft 18 against ${R.h17?'7 or 8':'2, 7 or 8'}:</b> stand.`,'<b>Soft 18 against 9, 10 or ace:</b> hit. An 18 is the underdog there.'],
+    hook:'Soft 18 has three answers: double low, stand in the middle, hit high.'},
+  {id:'pairsA',t:'Pairs: the always and the never',target:10,rows:[['p',11],['p',10],['p',8],['p',5]],pick:c=>c.kind==='p'&&[11,10,8,5].includes(c.n),lead:'Four pairs need no thought at all.',
+    rules:['<b>Aces:</b> always split.','<b>Eights:</b> always split. 16 is the worst hand you can hold.','<b>Tens:</b> never split. Keep the 20.','<b>Fives:</b> never split. Play them as a hard 10, which usually means double.'],
+    hook:'Always split aces and eights. Never split tens and fives.'},
+  {id:'pairsB',t:'Pairs: the rest',target:12,rows:[['p',9],['p',7],['p',6],['p',4],['p',3],['p',2]],pick:c=>c.kind==='p'&&[9,7,6,4,3,2].includes(c.n),lead:'The other pairs split only when the dealer is weak.',
+    rules:[`<b>Twos and threes:</b> split against ${R.das?'2':'4'} through 7.`,'<b>Sevens:</b> split against 2 through 7.',`<b>Sixes:</b> split against ${R.das?'2':'3'} through 6.`,'<b>Nines:</b> split against 2 through 9, except 7. Stand against 7, 10 and ace.',`<b>Fours:</b> ${R.das?'split only against 5 and 6':'never split'}.`,'When you do not split, play the total like any other hard hand.'],
+    hook:'Small pairs split against 7 or less. Nines skip the 7 because 18 already beats a dealer 17.'}];
+  if(R.sur)L.push({id:'sur',t:'Surrender: giving up half',target:10,sur:true,hot:[9,10,11],rows:(R.h17?[['h',17]]:[]).concat([['h',16],['h',15],['h',14]]),pick:rng('h',R.h17?14:14,R.h17?17:16),lead:'Surrender ends the hand and returns half your bet. Use it only where playing would lose more than half.',
+    rules:['<b>Hard 16 against 9, 10 or ace:</b> surrender.','<b>Hard 15 against 10:</b> surrender.'].concat(R.h17?['<b>When the dealer hits soft 17:</b> also surrender 15 and 17 against an ace.']:[]).concat(['It is offered only on your first two cards. Every other hand plays the way you already learned.']),
+    hook:'Surrender is for 16 and 15 against the dealer’s strongest cards, and almost nothing else.'});
+  L.push({id:'exam',t:'Final exam: the whole chart',target:25,sur:true,rows:[],pick:()=>true,lead:'Every hand against every dealer card, with all the rules on.',
+    rules:['Get 25 in a row to pass. A miss sends you back to zero and names the lesson to revisit.'],hook:''});
+  return L}
+const lessonRules=l=>({...S.rules,sur:l.sur?S.rules.sur:false});
+function curLesson(){const L=LESSONS();return L.find(l=>l.id===S.learn.cur)||L[0]}
+const courseDone=()=>LESSONS().every(l=>S.learn.done[l.id]);
+function lessonFor(c){const L=LESSONS(),id=c.kind==='h'?(c.want==='R'?'sur':c.n>=12?'stiff':'double'):c.kind==='s'?(c.n>=18?'softhigh':'softlow'):[11,10,8,5].includes(c.n)?'pairsA':'pairsB';return L.find(l=>l.id===id)||L[0]}
+function lessonSet(id,scroll){const old=curLesson();if(!old.target)S.learn.done[old.id]=true;S.learn.cur=id;D.lstreak=0;save();renderLearn();drillNext();
+  if(scroll)$('#d-learn').scrollIntoView({block:'start',behavior:'smooth'})}
+function lessonGo(d){const L=LESSONS(),i=Math.max(0,L.findIndex(l=>l.id===S.learn.cur));lessonSet(L[Math.max(0,Math.min(L.length-1,i+d))].id,true)}
+function sliceTable(rows,R){let h='<table class="chart"><tr><th class="rh"></th>';for(let u=2;u<=11;u++)h+=`<th>${u===11?'A':u}</th>`;h+='</tr>';
+  for(const[k,n]of rows){h+=`<tr><th class="rh">${rowLabel(k,n)}</th>`;for(let u=2;u<=11;u++){const c=cellCode(k,n,u,R);h+=`<td class="a-${c[0]}">${c}</td>`}h+='</tr>'}
+  return`<div class="chartwrap">${h}</table></div>`}
+function renderLearn(){const L=LESSONS(),l=curLesson(),i=L.findIndex(x=>x.id===l.id),done=S.learn.done,st=Math.min(D.lstreak,l.target);
+  $('#d-learn').innerHTML=`<div class="lsteps">${L.map((x,j)=>`<button class="ldot ${j===i?'on':''} ${done[x.id]?'done':''}" data-lesson="${x.id}" title="${x.t}" aria-label="Lesson ${j+1}: ${x.t}${done[x.id]?', passed':''}">${j+1}</button>`).join('')}</div>
+  <h3>Lesson ${i+1} of ${L.length}${done[l.id]?' · passed':''}</h3><h2>${l.t}</h2><p class="dlg-p" style="font-size:17px;max-width:64ch">${l.lead}</p>
+  <ul class="rules">${l.rules.map(r=>`<li>${r}</li>`).join('')}</ul>
+  ${l.hook?`<p class="hook"><b>Remember it as:</b> ${l.hook}</p>`:''}
+  ${l.rows.length?sliceTable(l.rows,lessonRules(l))+'<p class="goal">Your hand runs down the side, the dealer’s card across the top. H hit · S stand · D double · Ds double, or stand if you cannot · P split · R surrender</p>':''}
+  ${l.target?`<div class="lprog"><div class="meter" role="img" aria-label="${st} of ${l.target} in a row"><i style="width:${st/l.target*100}%"></i></div><span class="goal">${done[l.id]?'Passed. ':''}In a row: ${st} of ${l.target}. Practice below.</span></div>`:''}
+  <div class="row2" style="justify-content:flex-start">${i>0?'<button class="btn" data-lgo="-1">Previous lesson</button>':''}${i<L.length-1?`<button class="btn ${done[l.id]||!l.target?'primary':''}" data-lgo="1">${l.target?'Next lesson':'Start lesson 2'}</button>`:''}</div>`;
+  $('#d-drill').hidden=!l.target}
+$('#d-learn').addEventListener('click',e=>{let b;if(b=e.target.closest('[data-lesson]'))lessonSet(b.dataset.lesson,false);else if(b=e.target.closest('[data-lgo]'))lessonGo(+b.dataset.lgo)});
+function lessonAnswer(c,act,ok){const l=curLesson(),was=!!S.learn.done[l.id],L=LESSONS(),last=L[L.length-1].id===l.id;
+  if(ok){if(!c.hinted)D.lstreak++}else D.lstreak=0;
+  const passed=D.lstreak>=l.target&&!was;if(D.lstreak>=l.target)S.learn.done[l.id]=true;save();
+  const reason=why(c.kind,c.n,c.up,c.want),fb=$('#d-fb');fb.className='fb '+(ok?'ok':'no');
+  if(passed)fb.innerHTML=`<div><b class="v">Lesson passed.</b> ${l.target} in a row. ${last?'That is the whole chart. Keep it sharp with the drill and the daily workout.':'On to the next one.'}</div><button class="btn primary" id="d-next">${last?'Open the drill':'Next lesson'}<kbd>Space</kbd></button>`;
+  else if(ok)fb.innerHTML=`<div><b class="v">Correct.</b> ${reason}${c.hinted?' Hands where you looked at the rule do not count toward the streak.':''}</div>`;
+  else fb.innerHTML=`<div><b class="v">${ACT[c.want]}</b> is the play, not ${ACT[act].toLowerCase()}. ${reason}${l.id==='exam'?' Revisit the lesson “'+lessonFor(c).t+'”.':''}</div>${miniRow(c.kind,c.n,c.up,c.LR)}<button class="btn primary" id="d-next">Next hand<kbd>Space</kbd></button>`;
+  renderLearn();drillStats();
+  if(passed)$('#d-next').onclick=()=>last?setFocus('all'):lessonGo(1);else if(ok)D.timer=setTimeout(drillNext,900);else $('#d-next').onclick=drillNext}
+$('#d-hint').onclick=()=>{const c=D.cur;if(!c||D.answered||!c.lesson)return;c.hinted=true;const fb=$('#d-fb');fb.className='fb';fb.innerHTML=`<div><b class="v" style="color:var(--print)">The rule:</b> ${why(c.kind,c.n,c.up,c.want)}</div>`};
+
+function drillNext(){clearTimeout(D.timer);D.answered=false;const R=S.rules,les=D.sub==='learn'?curLesson():null;let cur;
+  if(les){if(!les.target){D.cur=null;return}const LR=lessonRules(les),list=CELLS.filter(les.pick);
+    // Deal the lesson's rows in rotation so every rule comes up, and lean toward the columns a lesson is about.
+    if(D.lq.id!==les.id||!D.lq.rows.length){const rows=[...new Set(list.map(c=>c.kind+c.n))];for(let i=rows.length-1;i>0;i--){const j=rnd(i+1);[rows[i],rows[j]]=[rows[j],rows[i]]}D.lq={id:les.id,rows}}
+    const row=D.lq.rows.pop(),inRow=list.filter(c=>c.kind+c.n===row),hot=les.hot&&Math.random()<.6?inRow.filter(c=>les.hot.includes(c.up)):inRow;let c;do{c=hot[rnd(hot.length)]}while(hot.length>1&&D.cur&&D.cur.key===c.key);
+    cur={...c,lesson:les.id,LR,want:resolve(cellCode(c.kind,c.n,c.up,LR),{double:true,split:true,surrender:LR.sur})};$('#d-note').textContent=''}
+  else if(D.focus==='dev'){const list=I18.filter(d=>d.kind);let d;do{d=list[rnd(list.length)]}while(D.cur&&D.cur.dev===d);
     const tc=d.idx+rnd(7)-3;cur={dev:d,kind:d.kind,n:d.n,up:d.up,tc,want:tc>=d.idx?d.hi:d.lo};$('#d-note').textContent='Deviation drill: no surrender, dealer stands on soft 17.'}
   else{const c=pickCell();cur={...c,want:resolve(cellCode(c.kind,c.n,c.up,R),{double:true,split:true,surrender:R.sur})}}
-  cur.cards=makeCards(cur.kind,cur.n);cur.upCard=cd(cur.up);D.cur=cur;fx('card');
+  cur.cards=makeCards(cur.kind,cur.n);cur.upCard=cd(cur.up);D.cur=cur;fx('card');const RR=cur.LR||R;
   $('#d-dealer').innerHTML=cardHTML(cur.upCard,{cls:'in'})+cardHTML({},{back:true});
   $('#d-hand').innerHTML=cur.cards.map(c=>cardHTML(c,{cls:'in'})).join('');
   $('#d-name').textContent=handName(cur.kind,cur.n===8&&cur.kind==='h'?total(cur.cards).total:cur.kind==='h'&&cur.n===18?total(cur.cards).total:cur.n)+' vs '+upName(cur.up);
   const tg=$('#d-tc');tg.hidden=!cur.dev;if(cur.dev)tg.textContent='True count '+fmt(cur.tc);
-  $$('#d-acts .act').forEach(b=>{const a=b.dataset.act;b.disabled=(a==='P'&&cur.kind!=='p')||(a==='R'&&(!R.sur||!!cur.dev))});
+  $$('#d-acts .act').forEach(b=>{const a=b.dataset.act;b.disabled=(a==='P'&&cur.kind!=='p')||(a==='R'&&(!RR.sur||!!cur.dev))});
   const fb=$('#d-fb');fb.className='fb';fb.textContent=cur.dev?'The count is '+fmt(cur.tc)+'. Does it change the play?':'What is the play?';
   drillStats()}
-function miniRow(kind,n,up){const R=S.rules;let h='<tr><th class="rh"></th>',r=`<tr><th class="rh">${rowLabel(kind,n)}</th>`;
+function miniRow(kind,n,up,R=S.rules){let h='<tr><th class="rh"></th>',r=`<tr><th class="rh">${rowLabel(kind,n)}</th>`;
   for(let u=2;u<=11;u++){const c=cellCode(kind,n,u,R);h+=`<th>${u===11?'A':u}</th>`;r+=`<td class="a-${c[0]} ${u===up?'cur':''}">${c}</td>`}
   return`<div class="chartwrap"><table class="chart">${h}</tr>${r}</tr></table></div>`}
-function drillAnswer(act){const c=D.cur;if(!c||D.answered||D.sub!=='drill')return;
-  if((act==='P'&&c.kind!=='p')||(act==='R'&&(!S.rules.sur||c.dev)))return;
+function drillAnswer(act){const c=D.cur;if(!c||D.answered||D.sub==='chart')return;const RR=c.LR||S.rules;
+  if((act==='P'&&c.kind!=='p')||(act==='R'&&(!RR.sur||c.dev)))return;
   D.answered=true;const ok=act===c.want;
-  tally(ok);fx(ok?'ok':'no');if(c.dev)push(S.dev.recent,ok,40);
+  tally(ok);fx(ok?'ok':'no');if(c.lesson){lessonAnswer(c,act,ok);return}
+  if(c.dev)push(S.dev.recent,ok,40);
   else{const st=S.strat,s=st.cells[c.key]||(st.cells[c.key]={r:0,w:0,run:0});if(ok){s.r++;s.run++}else{s.w++;s.run=0}
     push(st.recent,ok,100);st.n++;st.streak=ok?st.streak+1:0;st.best=Math.max(st.best,st.streak)}
   save();
@@ -744,12 +841,14 @@ function drillAnswer(act){const c=D.cur;if(!c||D.answered||D.sub!=='drill')retur
   drillStats();
   if(ok)D.timer=setTimeout(drillNext,c.dev?1400:800);else $('#d-next').onclick=drillNext;workTick('strategy',ok)}
 function drillStats(){const st=S.strat,dev=D.focus==='dev';
+  if(D.sub==='learn'){const l=curLesson(),L=LESSONS();$('#d-stats').innerHTML=`<div class="stat"><b>${Math.min(D.lstreak,l.target)} / ${l.target}</b><span>In a row to pass</span></div><div class="stat"><b>${L.filter(x=>S.learn.done[x.id]).length} / ${L.length}</b><span>Lessons passed</span></div>`;return}
   $('#d-stats').innerHTML=dev?`<div class="stat"><b>${S.dev.recent.length?pct(S.dev.recent)+'%':'–'}</b><span>Last ${S.dev.recent.length||40} deviations</span></div>`
   :`<div class="stat"><b>${st.streak}</b><span>Streak</span></div><div class="stat"><b>${st.recent.length?pct(st.recent)+'%':'–'}</b><span>Last ${st.recent.length||100} hands</span></div><div class="stat"><b>${st.n}</b><span>Hands drilled</span></div><div class="stat"><b>${st.best}</b><span>Best streak</span></div>`}
 $('#d-acts').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)drillAnswer(b.dataset.act)});
 $('#d-focus').addEventListener('click',e=>{const b=e.target.closest('[data-focus]');if(!b)return;setFocus(b.dataset.focus)});
 function setFocus(f){D.focus=f;segSet('#d-focus','focus',f);setSub('drill');drillNext()}
-function setSub(s){D.sub=s;segSet('#d-sub','sub',s);$('#d-drill').hidden=s!=='drill';$('#d-chart').hidden=s!=='chart';if(s==='chart')renderChart()}
+function setSub(s){D.sub=s;segSet('#d-sub','sub',s);$('#d-learn').hidden=s!=='learn';$('#d-chart').hidden=s!=='chart';$('#d-focus').hidden=s!=='drill';$('#d-hint').hidden=s!=='learn';$('#d-drill').hidden=s==='chart';
+  if(s==='chart')renderChart();else if(s==='learn'){D.lstreak=0;renderLearn();drillNext()}else drillNext()}
 $('#d-sub').addEventListener('click',e=>{const b=e.target.closest('[data-sub]');if(b)setSub(b.dataset.sub)});
 
 // ---------- chart ----------
@@ -978,8 +1077,8 @@ for(const[id,key]of[['others','others'],['every','every'],['speed','speed'],['de
 
 // ---------- the path ----------
 const STEPS=[
-  {href:'strategy',t:'Basic strategy',p:'The one correct play for every hand against every dealer card. Played perfectly it trims the house edge to about half a percent. The count adds nothing until this is automatic.',goal:'98% over your last 100 hands',go:'Drill strategy',
-    prog:()=>{const r=S.strat.recent;return{v:r.length?pct(r)/100*Math.min(1,r.length/100):0,label:r.length?`${pct(r)}% over ${r.length}`:'Not started',done:r.length>=100&&pct(r)>=98}}},
+  {href:'strategy',t:'Basic strategy',p:'Short lessons teach the chart one rule at a time, then the drill makes it automatic. Played perfectly it trims the house edge to about half a percent. The count adds nothing until this is automatic.',goal:'98% over your last 100 hands',go:()=>courseDone()?'Drill strategy':'Learn strategy',
+    prog:()=>{const r=S.strat.recent,L=LESSONS(),nd=L.filter(l=>S.learn.done[l.id]).length;if(nd<L.length)return{v:nd/L.length/2,label:`Lessons ${nd} of ${L.length}`,done:false};return{v:r.length?pct(r)/100*Math.min(1,r.length/100):0,label:r.length?`${pct(r)}% over ${r.length}`:'Not started',done:r.length>=100&&pct(r)>=98}}},
   {href:'count',t:'Running count',p:'Hi-Lo: cards 2 through 6 count +1, 7 through 9 count 0, tens and aces count −1. Keep one number in your head as the cards come out.',goal:'A full deck in 30 seconds',go:'Drill the count',
     prog:()=>{const b=S.count.best;return{v:b?Math.min(1,30/b):0,label:b?`Best deck ${b.toFixed(1)} s`:'Not started',done:!!b&&b<=30}}},
   {href:'true-count',t:'True count and bets',p:'Divide the running count by the decks still in the shoe. That number tells you how big your edge is, and how much to put out.',goal:'90% over your last 20 trays',go:'Drill conversions',
@@ -1032,8 +1131,8 @@ function chartTip(e){const tip=$('#daily .tip');if(!tip)return;const r=e.target.
   const half=tip.offsetWidth/2+2;tip.style.left=Math.max(half,Math.min(box.width-half,svg.left-box.left+svg.width*r.dataset.x))+'px';tip.style.top=(svg.top-box.top+svg.height*r.dataset.y)+'px'}
 for(const ev of['pointermove','pointerdown','pointerleave'])$('#daily').addEventListener(ev,chartTip);
 function renderPath(){$('#daily').innerHTML=dailyHTML();$('#w-start').onclick=workStart;
-  $('#steps').innerHTML=STEPS.map((s,i)=>{const p=s.prog();return`<li class="step ${p.done?'done':''}"><div class="body"><h2>${s.t}</h2><p>${s.p}</p><div class="meter" role="img" aria-label="Progress ${Math.round(p.v*100)}%"><i style="width:${Math.round(p.v*100)}%"></i></div><div class="goal">${p.done?'Passed':'Pass mark: '+s.goal} · ${p.label}</div></div><a class="btn" style="text-decoration:none;white-space:nowrap" href="#${s.href}" data-step="${i}">${s.go}</a></li>`}).join('')}
-$('#steps').addEventListener('click',e=>{const a=e.target.closest('[data-step]');if(!a)return;const s=STEPS[+a.dataset.step];if(s.href==='strategy')setFocus(s.focus||'all')});
+  $('#steps').innerHTML=STEPS.map((s,i)=>{const p=s.prog();return`<li class="step ${p.done?'done':''}"><div class="body"><h2>${s.t}</h2><p>${s.p}</p><div class="meter" role="img" aria-label="Progress ${Math.round(p.v*100)}%"><i style="width:${Math.round(p.v*100)}%"></i></div><div class="goal">${p.done?'Passed':'Pass mark: '+s.goal} · ${p.label}</div></div><a class="btn" style="text-decoration:none;white-space:nowrap" href="#${s.href}" data-step="${i}">${typeof s.go==='function'?s.go():s.go}</a></li>`}).join('')}
+$('#steps').addEventListener('click',e=>{const a=e.target.closest('[data-step]');if(!a)return;const s=STEPS[+a.dataset.step];if(s.href!=='strategy')return;if(s.focus)setFocus(s.focus);else if(courseDone())setFocus('all');else setSub('learn')});
 (function demo(){const cs=[{r:'5',s:2},{r:'K',s:0},{r:'8',s:3},{r:'3',s:1},{r:'A',s:0},{r:'6',s:3}];
   $('#demo').innerHTML=arcSVG('BLACKJACK PAYS 3 TO 2','Low cards out, count up · High cards out, count down')+`<div class="demo-row">${cs.map(c=>`<div class="cell">${cardHTML(c)}${hlTag(hilo(c.r))}</div>`).join('')}</div><div class="lbl">Running count after six cards: <span class="num" style="color:var(--print);font-size:15px">${fmt(cs.reduce((a,c)=>a+hilo(c.r),0))}</span></div>`})();
 let armed=0;$('#reset').onclick=e=>{if(Date.now()-armed<4000){S=blank();save();e.target.textContent='Progress erased';renderPath();armed=0;return}armed=Date.now();e.target.textContent='Click again to erase everything'};
@@ -1059,7 +1158,7 @@ document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||$('#a
     if(k==='enter'){e.preventDefault();STEP.go();return}}
   if(go&&e.target.closest('button,a,summary'))return;
   const click=id=>{const b=$(id);if(b){e.preventDefault();b.click();return true}};
-  if(cur==='strategy'&&D.sub==='drill'){if(ACT[k.toUpperCase()])drillAnswer(k.toUpperCase());else if(go)click('#d-next')}
+  if(cur==='strategy'&&D.sub!=='chart'){if(ACT[k.toUpperCase()])drillAnswer(k.toUpperCase());else if(go)click('#d-next')}
   else if(cur==='count'&&go){click('#c-nx')||click('#c-go')}
   else if(cur==='true-count'&&go)click('#p-next');
   else if(cur==='table'&&T.prompt&&T.prompt.kind==='play'&&ACT[k.toUpperCase()]&&T.prompt.can[k.toUpperCase()])T.prompt.res(k.toUpperCase())});
@@ -1071,13 +1170,13 @@ function syncControls(){
   segSet('#t-others','others',S.table.others);segSet('#t-every','every',S.table.every);segSet('#t-speed','speed',S.table.speed);segSet('#t-dev','dev',S.table.dev);
   segSet('#c-tpace','tpace',S.count.tpace);segSet('#c-rounds','rounds',S.count.rounds);segSet('#c-noise','noise',S.count.noise);fxUI()}
 // Re-draw everything that shows saved state, after progress arrives from the account.
-function refreshAll(rulesChanged,decksChanged){syncControls();renderRules();renderChart();
+function refreshAll(rulesChanged,decksChanged){syncControls();renderRules();renderChart();if(D.sub==='learn')renderLearn();
   if(rulesChanged){$('#d-arc').innerHTML=ruleArc();$('#t-arc').innerHTML=ruleArc();drillNext();tcNew()}else{drillStats();tcStats()}
   countStats();if(decksChanged&&T.started)tStart();else tHud();if(cur==='path')renderPath()}
 renderRules();$('#d-arc').innerHTML=ruleArc();$('#t-arc').innerHTML=ruleArc();
-segSet('#d-sub','sub','drill');segSet('#d-focus','focus','all');segSet('#c-mode','mode','flash');syncControls();
+segSet('#d-focus','focus','all');segSet('#c-mode','mode','flash');syncControls();
 $('#ramp').innerHTML=[['+1 or less',1],['+2',2],['+3',4],['+4',6],['+5 or more',8]].map(([l,u])=>`<div class="chipcol"><span class="chip u${u}">${u}</span>${l}</div>`).join('');
-renderChart();drillNext();countIdle();tcNew();tRender();route();initAccount();
+renderChart();setSub(courseDone()?'drill':'learn');countIdle();tcNew();tRender();route();initAccount();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>

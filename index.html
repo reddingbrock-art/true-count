@@ -604,7 +604,7 @@ function tally(ok){const h=S.hist[today()]||(S.hist[today()]={ok:0,n:0});h.n++;i
   if(W.on&&W.res[W.i]){W.res[W.i].n++;if(ok)W.res[W.i].ok++}}
 function streak(){let n=0;const d=new Date();if(!(S.hist[ymd(d)]||{}).w)d.setDate(d.getDate()-1);while((S.hist[ymd(d)]||{}).w){n++;d.setDate(d.getDate()-1)}return n}
 
-// ---------- sound and haptics (synthesised, no audio files) ----------
+// ---------- sound and haptics (synthesized, no audio files) ----------
 let AC=null,NOISE=null,hapEl=null;
 // iOS only starts audio from inside a tap, and it mutes Web Audio whenever the ring switch is on silent unless the
 // page asks for a "playback" audio session. So: build and resume the context on every tap (capture phase, before the
@@ -927,7 +927,7 @@ function stepper(el,label,onSubmit){let v=0;
 // ---------- running count ----------
 const C={mode:'flash',run:0,seq:[],i:0,t0:0,tick:0,state:'idle',over:null,quiz:false,qt:0};
 // ---------- counting lessons ----------
-// One course across two pages: six lessons practised here, then true count and bets on the True count page.
+// One course across two pages: six lessons practiced here, then true count and bets on the True count page.
 const CL={streak:0,tcRun:0,betRun:0,showP:false};
 function CLESSONS(){return[
   {id:'values',view:'count',practice:'tag',target:20,t:'Three groups, three values',lead:'Hi-Lo sorts all thirteen ranks into three groups. That is the whole system.',
@@ -988,7 +988,7 @@ $('#c-ctl').addEventListener('click',e=>{const b=e.target.closest('[data-tag]');
 function countIdle(){C.run++;clearInterval(C.tick);clearTimeout(C.qt);C.state='idle';C.quiz=false;NOISE&&NOISE.stop();const m=C.mode,l=m==='learn'?curCL():null;
   $('#c-flashopts').hidden=m!=='flash';$('#c-tableopts').hidden=m!=='table';$('#c-prog').textContent='Ready';C.over=l&&l.params||null;renderCLearn();countStats();
   const note=t=>{$('#c-stage').innerHTML=`<p class="stage-note">${t}</p>`},go=(label,fn)=>{$('#c-ctl').innerHTML=`<button class="btn primary" id="c-go">${label}<kbd>Space</kbd></button>`;$('#c-go').onclick=fn};
-  if(l&&l.view!=='count'){note('This lesson is practised with the discard tray on the True count page.');$('#c-ctl').innerHTML='<a class="btn primary" style="text-decoration:none" href="#true-count">Go to the True count page</a>';return}
+  if(l&&l.view!=='count'){note('This lesson is practiced with the discard tray on the True count page.');$('#c-ctl').innerHTML='<a class="btn primary" style="text-decoration:none" href="#true-count">Go to the True count page</a>';return}
   if(l&&(l.practice==='tag'||l.practice==='pair')){tagNext();return}
   const kind=l?l.practice:m;
   if(kind==='seq'){note(`${l.params.len} cards, ${l.params.per===1?'one at a time':'two at a time'}. Keep the count, then enter it when they stop.`);go('Deal',flashStart)}

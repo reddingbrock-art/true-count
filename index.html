@@ -182,10 +182,16 @@ table.dev{width:100%;border-collapse:collapse;font-size:14px}
 .stage .card{--cw:inherit}
 .stage-q{font:400 64px/1 var(--f-display);color:var(--print);opacity:.8}
 .stage-note{color:var(--ivory);opacity:.8;text-align:center;max-width:36ch}
-.stepper{display:grid;gap:12px;justify-items:center}
+.numpad{display:grid;gap:12px;justify-items:center;width:100%}
 .st-l{font-weight:600}
-.st-row{display:flex;gap:8px;align-items:center}
-.st-v{font:500 34px/1 var(--f-data);min-width:92px;text-align:center;font-variant-numeric:tabular-nums}
+.np-hint{color:var(--dim);font-size:14px;margin-top:-6px}
+.np-top,.np-keys{display:grid;gap:8px;width:min(100%,340px)}
+.np-top{grid-template-columns:1fr 1.5fr 1fr}
+.np-keys{grid-template-columns:repeat(5,minmax(0,1fr))}
+.numpad .btn.sq{min-width:0;min-height:48px;font-size:18px;padding:8px 4px;display:grid;place-items:center}
+.st-v{font:500 32px/1 var(--f-data);min-height:52px;display:grid;place-items:center;border:1.5px solid var(--line);border-radius:12px;background:rgba(0,0,0,.24);font-variant-numeric:tabular-nums}
+.st-v:empty::before{content:"?";opacity:.35}
+.btn:disabled{opacity:.4;cursor:default}
 .ctl{display:grid;gap:14px;justify-items:center;text-align:center}
 .audit{display:flex;flex-wrap:wrap;gap:8px 6px;justify-content:center}
 .au{display:grid;justify-items:center;gap:3px;font:500 11px var(--f-data)}
@@ -916,13 +922,21 @@ $('#d-chart').addEventListener('click',e=>{const td=e.target.closest('td[data-k]
   const act=resolve(cellCode(k,n,u,R),{double:true,split:true,surrender:R.sur}),s=S.strat.cells[k+n+'-'+u];
   const el=$('#chart-why');el.className='fb ok';el.innerHTML=`<div><b class="v">${rowLabel(k,n)} vs ${u===11?'A':u}: ${ACT[act]}.</b> ${why(k,n,u,act)}</div><div class="num" style="font-size:13px;color:var(--dim)">${s?`You: ${s.r} right, ${s.w} wrong`:'Not drilled yet'}</div>`});
 
-// ---------- stepper ----------
-function stepper(el,label,onSubmit){let v=0;
-  el.innerHTML=`<div class="stepper"><div class="st-l">${label}</div><div class="st-row"><button class="btn sq" data-d="-5">−5</button><button class="btn sq" data-d="-1">−1</button><output class="st-v">0</output><button class="btn sq" data-d="1">+1</button><button class="btn sq" data-d="5">+5</button></div><button class="btn primary st-go">Lock it in<kbd>Enter</kbd></button></div>`;
-  const out=el.querySelector('.st-v'),set=n=>{v=Math.max(-40,Math.min(40,n));out.textContent=fmt(v)};
-  el.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>set(v+ +b.dataset.d));
-  const go=()=>onSubmit(v);el.querySelector('.st-go').onclick=go;
-  el.querySelector('.stepper')._ctl={bump:d=>set(v+d),go}}
+// ---------- number entry ----------
+// A keypad, so the count is typed. The earlier −5/−1/+1/+5 nudge buttons read as a row of answer choices.
+function numpad(el,label,onSubmit){let digits='',neg=false;
+  el.innerHTML=`<div class="numpad"><div class="st-l">${label}</div><div class="np-hint">Type your answer, then lock it in.</div>
+    <div class="np-top"><button class="btn sq" data-np="sign" aria-label="Switch between plus and minus">+/−</button><output class="st-v" aria-live="polite" aria-label="Your answer"></output><button class="btn sq" data-np="del" aria-label="Delete"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z"/><path d="m12 9.5 5 5m0-5-5 5"/></svg></button></div>
+    <div class="np-keys">${[1,2,3,4,5,6,7,8,9,0].map(n=>`<button class="btn sq" data-np="${n}">${n}</button>`).join('')}</div>
+    <button class="btn primary st-go" disabled>Lock it in<kbd>Enter</kbd></button></div>`;
+  const out=el.querySelector('.st-v'),goBtn=el.querySelector('.st-go'),num=()=>(neg?-1:1)*(+digits||0);
+  const show=()=>{out.textContent=digits?fmt(num()):neg?'−':'';goBtn.disabled=!digits};
+  const key=k=>{if(k==='sign')neg=!neg;else if(k==='del'){if(digits)digits=digits.slice(0,-1);else neg=false}
+    else if(digits.length<2||digits==='0')digits=(digits==='0'?'':digits)+k;show()};
+  const sign=n=>{neg=n;show()},bump=d=>{const n=Math.max(-99,Math.min(99,num()+d));neg=n<0;digits=String(Math.abs(n));show()};
+  const go=()=>{if(digits)onSubmit(num())};
+  el.querySelector('.numpad').addEventListener('click',e=>{const b=e.target.closest('[data-np]');if(b)key(b.dataset.np)});goBtn.onclick=go;
+  el.querySelector('.numpad')._ctl={key,sign,bump,go};show()}
 
 // ---------- running count ----------
 const C={mode:'flash',run:0,seq:[],i:0,t0:0,tick:0,state:'idle',over:null,quiz:false,qt:0};
@@ -1012,7 +1026,7 @@ async function tableDrill(){const my=++C.run,o=C.over||S.count,pace=o.tpace*1000
       C.rounds.push([...spots.flat(),...dealer].reduce((a,c)=>a+hilo(c.r),0));await nap(pace*2.2);
       for(let i=SP-1;i>=0;i--){spots[i]=[];paint();await nap(pace*.45)}dealer=[];paint();await nap(pace*.8)}
     NOISE&&NOISE.stop();C.state='ask';$('#c-stage').innerHTML='<div class="stage-q">?</div>';$('#c-prog').textContent=rounds+' rounds dealt';
-    stepper($('#c-ctl'),'What is the running count?',ans=>{const rc=C.rounds.reduce((a,b)=>a+b,0),ok=ans===rc;push(S.count.recent,ok,20);tally(ok);fx(ok?'ok':'no');save();C.state='done';
+    numpad($('#c-ctl'),'What is the running count?',ans=>{const rc=C.rounds.reduce((a,b)=>a+b,0),ok=ans===rc;push(S.count.recent,ok,20);tally(ok);fx(ok?'ok':'no');save();C.state='done';
       let run=0;$('#c-stage').innerHTML=`<div class="stage-q">${fmt(rc)}</div>`;
       $('#c-ctl').innerHTML=`<div class="fb ${ok?'ok':'no'}" style="justify-items:center"><div><b class="v">${ok?'Correct.':'The count was '+fmt(rc)+'.'}</b> ${ok?'Round by round:':'You said '+fmt(ans)+'. Round by round:'}</div><div class="audit">${C.rounds.map((d,i)=>{run+=d;return`<div class="au"><span>Round ${i+1}</span>${hlTag(d)}<span class="run">${fmt(run)}</span></div>`}).join('')}</div></div><button class="btn primary" id="c-go">Deal again<kbd>Space</kbd></button>`;
       $('#c-go').onclick=tableDrill;countStats();workTick('count',ok);clAfter(ok)})}
@@ -1024,7 +1038,7 @@ async function flashStart(){const my=++C.run,o=C.over||S.count,per=o.per,len=o.l
   for(let i=0;i<len;i+=per){$('#c-stage').innerHTML=`<div class="spread">${C.seq.slice(i,i+per).map(c=>cardHTML(c,{cls:'in'})).join('')}</div>`;
     $('#c-prog').textContent=Math.min(i+per,len)+' / '+len;fx('card');await sleep(o.pace*1000);if(C.run!==my)return}
   C.state='ask';$('#c-stage').innerHTML='<div class="stage-q">?</div>';$('#c-prog').textContent=len+' cards dealt';
-  stepper($('#c-ctl'),'What is the running count?',ans=>{const rc=C.seq.reduce((a,c)=>a+hilo(c.r),0),ok=ans===rc;push(S.count.recent,ok,20);tally(ok);fx(ok?'ok':'no');save();C.state='done';workTick('count',ok);
+  numpad($('#c-ctl'),'What is the running count?',ans=>{const rc=C.seq.reduce((a,c)=>a+hilo(c.r),0),ok=ans===rc;push(S.count.recent,ok,20);tally(ok);fx(ok?'ok':'no');save();C.state='done';workTick('count',ok);
     $('#c-stage').innerHTML=`<div class="stage-q">${fmt(rc)}</div>`;
     $('#c-ctl').innerHTML=`<div class="fb ${ok?'ok':'no'}" style="justify-items:center"><div><b class="v">${ok?'Correct.':'The count was '+fmt(rc)+'.'}</b> ${ok?'Each card, its value, and the count after it:':'You said '+fmt(ans)+'. Find where you slipped:'}</div>${auditHTML(C.seq)}</div><button class="btn primary" id="c-go">Deal again<kbd>Space</kbd></button>`;
     $('#c-go').onclick=flashStart;countStats();clAfter(ok)})}
@@ -1058,7 +1072,7 @@ const chipsHTML=()=>`<div class="chips">${CHIPS.map(u=>`<button class="chip u${u
 function tcNew(){const decks=S.rules.decks,dealt=(1+rnd(decks*1.5))/2,left=decks-dealt,rc=Math.round((rnd(10)-3+Math.random()-.5)*left);
   P.cur={decks,dealt,left,rc,exact:rc/left};
   $('#p-tray').innerHTML=trayHTML(dealt,decks,S.tc.marks);$('#p-rc').textContent=fmt(rc);$('#p-shoe').textContent=decks+'-deck shoe';
-  stepper($('#p-ctl'),'What is the true count?',ans=>{P.cur.ans=ans;
+  numpad($('#p-ctl'),'What is the true count?',ans=>{P.cur.ans=ans;
     $('#p-ctl').innerHTML=`<div class="st-l">True count ${fmt(ans)}. How many units do you bet?</div>${chipsHTML()}`;
     $$('#p-ctl [data-bet]').forEach(b=>b.onclick=()=>tcGrade(+b.dataset.bet))});tcStats()}
 function tcGrade(bet){const p=P.cur,fl=Math.floor(p.exact),okT=p.ans===fl||p.ans===Math.round(p.exact),okB=bet===ramp(fl)||bet===ramp(Math.round(p.exact));
@@ -1117,7 +1131,7 @@ function tRender(){const hid=T.dealer.some(c=>c.hidden);
 function tActions(){const el=$('#t-actions'),p=T.prompt;
   if(!p){el.innerHTML='<div class="wait">Dealing…</div>';return}
   if(p.kind==='review'){el.innerHTML=reviewHTML(true);return}
-  if(p.kind==='count'){stepper(el,'Count check. What is the running count?',v=>p.res(v));return}
+  if(p.kind==='count'){numpad(el,'Count check. What is the running count?',v=>p.res(v));return}
   if(p.kind==='bet'){el.innerHTML=`<div class="st-l" style="text-align:center">Place your bet, in units.</div>${chipsHTML()}`;return}
   if(p.kind==='ins'){el.innerHTML=`<div class="st-l" style="text-align:center">Dealer shows an ace. Insurance?</div><div class="row2"><button class="btn primary" data-ins="1">Take insurance</button><button class="btn" data-ins="0">No insurance</button></div>`;return}
   el.innerHTML=`<div class="acts">${Object.keys(ACT).map(a=>`<button class="act a-${a}" data-act="${a}" ${p.can[a]?'':'disabled'}>${ACT[a]}<kbd>${a}</kbd></button>`).join('')}</div>`}
@@ -1269,11 +1283,15 @@ function route(){let v=location.hash.slice(1);if(!VIEWS.includes(v))v='path';cur
 window.addEventListener('hashchange',route);
 document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||$('#acct').open)return;const k=e.key.toLowerCase(),go=k===' '||k==='enter';
   if(e.target.closest('input,select,textarea'))return;
-  const sEl=$('#v-'+cur+' .stepper'),STEP=sEl&&sEl._ctl;
-  if(STEP){
-    if(k==='arrowup'||k==='arrowright'||k==='+'||k==='='){e.preventDefault();STEP.bump(1);return}
-    if(k==='arrowdown'||k==='arrowleft'||k==='-'){e.preventDefault();STEP.bump(-1);return}
-    if(k==='enter'){e.preventDefault();STEP.go();return}}
+  const sEl=$('#v-'+cur+' .numpad'),PAD=sEl&&sEl._ctl;
+  if(PAD){const hit=f=>{e.preventDefault();f()};
+    if(/^[0-9]$/.test(k))return hit(()=>PAD.key(k));
+    if(k==='-'||k==='_')return hit(()=>PAD.sign(true));
+    if(k==='+'||k==='=')return hit(()=>PAD.sign(false));
+    if(k==='backspace'||k==='delete')return hit(()=>PAD.key('del'));
+    if(k==='arrowup'||k==='arrowright')return hit(()=>PAD.bump(1));
+    if(k==='arrowdown'||k==='arrowleft')return hit(()=>PAD.bump(-1));
+    if(k==='enter')return hit(PAD.go)}
   if(go&&e.target.closest('button,a,summary'))return;
   const click=id=>{const b=$(id);if(b){e.preventDefault();b.click();return true}};
   if(cur==='strategy'&&D.sub!=='chart'){if(ACT[k.toUpperCase()])drillAnswer(k.toUpperCase());else if(go){click('#d-next')||(!$('#d-recall').hidden&&click('#r-check'))}}

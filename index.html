@@ -622,34 +622,50 @@ function unlock(){if(!S.prefs.fx&&!S.count.noise)return;try{
 for(const ev of['touchend','mouseup','click','keydown'])addEventListener(ev,unlock,{capture:true,passive:true});
 function audio(){return AC}
 function audioDiag(){return`Audio ${AC?AC.state:'not started'} · session ${navigator.audioSession?navigator.audioSession.type:'not available'}${AC?' · '+AC.sampleRate+' Hz':''}`}
-function tone(f,at,dur,type,g){const a=AC,o=a.createOscillator(),v=a.createGain(),t=a.currentTime+at;o.type=type;o.frequency.value=f;
-  v.gain.setValueAtTime(0,t);v.gain.linearRampToValueAtTime(g,t+.008);v.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(v).connect(a.destination);o.start(t);o.stop(t+dur+.03)}
-function burst(dur,hp,g){const a=AC,n=Math.floor(a.sampleRate*dur),b=a.createBuffer(1,n,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
-  const s=a.createBufferSource(),f=a.createBiquadFilter(),v=a.createGain();s.buffer=b;f.type='highpass';f.frequency.value=hp;v.gain.value=g;s.connect(f).connect(v).connect(a.destination);s.start()}
+/*SOUND-START*/
+// Every sound is built for a phone speaker, which plays almost nothing below about 300 Hz: short hits of shaped noise
+// for cards and chips, and soft struck notes (a few sine partials that ring out) for right and wrong.
+const noiseBuf=a=>a._nz||(a._nz=(()=>{const b=a.createBuffer(1,a.sampleRate>>1,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;return b})());
+// Noise through a band that slides from f0 down to f1 while it dies away.
+function hit(a,dst,t,dur,f0,f1,q,g){const s=a.createBufferSource(),f=a.createBiquadFilter(),v=a.createGain();s.buffer=noiseBuf(a);
+  f.type='bandpass';f.Q.value=q;f.frequency.setValueAtTime(f0,t);f.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  v.gain.setValueAtTime(0,t);v.gain.linearRampToValueAtTime(g,t+.002);v.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  s.connect(f).connect(v).connect(dst);s.start(t,Math.random()*.3);s.stop(t+dur+.02)}
+// A struck note: each partial starts at once and fades on its own, the higher ones faster.
+function ping(a,dst,t,f,dur,g,parts=[[1,1],[2,.22],[4,.07]]){for(const[m,w]of parts){const o=a.createOscillator(),v=a.createGain(),d=dur/Math.sqrt(m);o.frequency.value=f*m;
+  v.gain.setValueAtTime(0,t);v.gain.linearRampToValueAtTime(g*w,t+.005);v.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(v).connect(dst);o.start(t);o.stop(t+d+.03)}}
+const VOICE={
+  // A card sliding off the shoe and landing on felt. Pitch varies a little so a run of cards is not one repeated sample.
+  card(a,d,t){const k=.88+Math.random()*.26;hit(a,d,t,.11,3400*k,1100*k,.7,.3);hit(a,d,t+.012,.07,950*k,520*k,1.1,.28)},
+  // Two clay chips meeting: a dull knock with no musical pitch.
+  chip(a,d,t,g=1){for(const[dt,w]of[[0,1],[.07,.55]]){const k=.93+Math.random()*.14;hit(a,d,t+dt,.02,5200,2600,.9,.32*w*g);ping(a,d,t+dt,2050*k,.06,.09*w*g,[[1,1],[1.53,.6],[2.37,.3]])}},
+  // Right: two soft rising notes. Wrong: two lower falling ones, muted rather than a buzzer.
+  ok(a,d,t){ping(a,d,t,784,.2,.12);ping(a,d,t+.08,1175,.32,.11)},
+  no(a,d,t){ping(a,d,t,415,.17,.15,[[1,1],[2,.1]]);ping(a,d,t+.11,330,.26,.14,[[1,1],[2,.1]])}};
+/*SOUND-END*/
+let OUT=null;
+function out(){if(!OUT||OUT.context!==AC){OUT=AC.createGain();OUT.gain.value=1;OUT.connect(AC.destination)}return OUT}
 function haptic(pat){try{if(navigator.vibrate){navigator.vibrate(pat);return}
   // iOS has no vibrate(); toggling a hidden switch control gives a light system tick on recent versions.
   if(!hapEl){hapEl=document.createElement('label');hapEl.setAttribute('aria-hidden','true');hapEl.style.cssText='position:fixed;left:-200px;top:0;opacity:0;pointer-events:none';hapEl.innerHTML='<input type="checkbox" switch tabindex="-1">';document.body.appendChild(hapEl)}
   hapEl.click()}catch(e){}}
-function fx(k){if(!S.prefs.fx||!audio())return;
-  if(k==='card')burst(.07,2200,.15);
-  else if(k==='chip'){tone(2600,0,.05,'triangle',.06);tone(3400,.035,.05,'triangle',.045);haptic(8)}
-  else if(k==='ok'){tone(660,0,.12,'sine',.06);tone(990,.09,.16,'sine',.05);haptic(10)}
-  else if(k==='no'){tone(196,0,.2,'triangle',.09);tone(147,.08,.24,'triangle',.07);haptic([30,50,30])}}
+function fx(k){if(!S.prefs.fx||!audio())return;VOICE[k](AC,out(),AC.currentTime+.005);
+  if(k==='chip')haptic(8);else if(k==='ok')haptic(10);else if(k==='no')haptic([30,50,30])}
 // Casino floor bed for the table counting drill: filtered noise that swells, plus stray chip clicks and chimes.
 function noiseStart(){if(NOISE||!audio())return;const a=AC,len=a.sampleRate*4,b=a.createBuffer(1,len,a.sampleRate),d=b.getChannelData(0);let last=0;
   for(let i=0;i<len;i++){last=(last+.02*(Math.random()*2-1))/1.02;d[i]=last*3.5*Math.min(1,i/2000,(len-i)/2000)}
   const s=a.createBufferSource(),bp=a.createBiquadFilter(),g=a.createGain(),lfo=a.createOscillator(),lg=a.createGain();
   s.buffer=b;s.loop=true;bp.type='bandpass';bp.frequency.value=520;bp.Q.value=.6;g.gain.value=.5;lfo.frequency.value=.23;lg.gain.value=.18;
   lfo.connect(lg).connect(g.gain);lfo.start();s.connect(bp).connect(g).connect(a.destination);s.start();
-  const blips=setInterval(()=>{if(Math.random()>.6)return;if(Math.random()<.5){tone(2400+Math.random()*1400,0,.05,'triangle',.03);tone(3000+Math.random()*900,.04,.05,'triangle',.025)}
-    else{const f=[523,659,784,1047][rnd(4)];tone(f,0,.18,'sine',.02);tone(f*1.25,.12,.2,'sine',.018)}},700);
+  const blips=setInterval(()=>{if(Math.random()>.6)return;const t=a.currentTime+.01;if(Math.random()<.5)VOICE.chip(a,out(),t,.35);
+    else{const f=[523,659,784,1047][rnd(4)];ping(a,out(),t,f,.22,.018);ping(a,out(),t+.12,f*1.25,.26,.016)}},700);
   NOISE={stop(){try{s.stop();lfo.stop()}catch(e){}clearInterval(blips);NOISE=null}}}
 const ICON_ON='<svg viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18.500v-13L7.500 9.500H4z"/><path d="M15.500 9a4.200 4.200 0 0 1 0 6"/><path d="M18 6.500a7.800 7.800 0 0 1 0 11"/></svg>',ICON_OFF='<svg viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18.500v-13L7.500 9.500H4z"/><path d="M16 9.500l5 5M21 9.500l-5 5"/></svg>';
 function fxUI(){const b=$('#fx-btn'),on=!!S.prefs.fx;b.innerHTML=on?ICON_ON:ICON_OFF;b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',on?'Sound and haptics on':'Sound and haptics off');b.title=on?'Sound and haptics on':'Sound and haptics off'}
 $('#fx-btn').onclick=()=>{S.prefs.fx=!S.prefs.fx;save();fxUI();if(S.prefs.fx){unlock();fx('ok')}else try{if(navigator.audioSession)navigator.audioSession.type='auto'}catch(e){}};
 $('#fx-test').onclick=()=>{const d=$('#fx-diag');if(!S.prefs.fx){d.textContent='Sound is switched off. Tap the speaker button at the top first.';return}
-  unlock();if(AC){tone(523,0,.18,'sine',.12);tone(659,.16,.18,'sine',.12);tone(784,.32,.3,'sine',.12);haptic(10)}
-  d.textContent='Playing three notes…';setTimeout(()=>{d.textContent=audioDiag()+'. No sound? Turn the volume up.'},700)};
+  unlock();if(AC){const t=AC.currentTime+.02;VOICE.card(AC,out(),t);VOICE.chip(AC,out(),t+.6);VOICE.ok(AC,out(),t+1.2);VOICE.no(AC,out(),t+1.9);haptic(10)}
+  d.textContent='Playing a card, a chip, a right answer and a wrong answer…';setTimeout(()=>{d.textContent=audioDiag()+'. No sound? Turn the volume up.'},2600)};
 
 // ---------- account sync (Supabase REST, no library) ----------
 // One row per user in public.progress holds the whole saved state. Newest write wins; at sign-in the account's copy wins.

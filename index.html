@@ -239,6 +239,15 @@ span.chip:hover{transform:none}
   #d-focus button{white-space:nowrap}
   .hud{gap:12px 22px}
 }
+/* whole-row recall */
+.rcells{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px}
+.rcell{height:48px;border-radius:10px;border:1.5px solid var(--line);background:transparent;color:var(--ivory);font:500 16px var(--f-data);cursor:pointer;padding:0}
+.rcell[aria-pressed="true"]{background:var(--ivory);color:var(--ink);border-color:var(--ivory)}
+.rcell.hit{background:var(--good);color:var(--ink);border-color:var(--good)}
+.rcell.bad{background:var(--bad);color:var(--ink);border-color:var(--bad)}
+.rcell.miss{background:transparent;border:2px dashed var(--good);color:var(--good)}
+.rcell:disabled{cursor:default}
+.pill{display:inline-block;padding:0 10px;border-radius:999px;font-weight:700}
 /* lessons */
 .lsteps{display:flex;flex-wrap:wrap;gap:6px}
 .ldot{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);background:transparent;color:var(--dim);font:500 13px var(--f-data);cursor:pointer;padding:0}
@@ -340,13 +349,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div id="rules-strategy"></div>
   <div class="opts">
     <div class="seg" id="d-sub"><button data-sub="learn">Learn</button><button data-sub="drill">Drill</button><button data-sub="chart">Chart</button></div>
-    <div class="seg" id="d-focus"><button data-focus="all">All hands</button><button data-focus="h">Hard</button><button data-focus="s">Soft</button><button data-focus="p">Pairs</button><button data-focus="miss">My misses</button><button data-focus="dev">Deviations</button></div>
+    <div class="seg" id="d-focus"><button data-focus="all">All hands</button><button data-focus="h">Hard</button><button data-focus="s">Soft</button><button data-focus="p">Pairs</button><button data-focus="miss">Due for review</button><button data-focus="recall">Whole rows</button><button data-focus="dev">Deviations</button></div>
   </div>
   <div class="box col" id="d-learn" hidden></div>
   <div class="cols" id="d-drill">
     <div class="col">
       <div class="felt">
-        <div class="lbl">Dealer shows</div>
+        <div class="lbl" id="d-dlbl">Dealer shows</div>
         <div class="hand" id="d-dealer"></div>
         <div id="d-arc" style="width:100%;display:grid;justify-items:center"></div>
         <div class="hand" id="d-hand"></div>
@@ -360,6 +369,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
         <button class="act a-P" data-act="P">Split<kbd>P</kbd></button>
         <button class="act a-R" data-act="R">Surrender<kbd>R</kbd></button>
       </div>
+      <div class="col" id="d-recall" hidden>
+        <div class="st-l" id="r-q"></div>
+        <div class="rcells" id="r-cells"></div>
+        <button class="btn primary" id="r-check" style="justify-self:start">Check<kbd>Enter</kbd></button>
+      </div>
       <button class="link" id="d-hint" style="justify-self:start" hidden>Show me the rule for this hand</button>
     </div>
     <div class="col">
@@ -371,7 +385,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div class="col" id="d-chart" hidden>
     <div class="legend" id="legend"></div>
     <div class="cols"><div class="col" id="chart-a"></div><div class="col" id="chart-b"></div></div>
-    <div class="fb" id="chart-why">Select any cell to see why that play is right. A dot marks hands you have missed recently.</div>
+    <div class="fb" id="chart-why">Select any cell to see why that play is right. A dot marks hands that are due for review.</div>
     <div class="box col">
       <h2>The Illustrious 18</h2>
       <p style="color:var(--dim);max-width:70ch">The plays where the true count overrides the chart, ranked by how much they earn. Indices are for Hi-Lo with the dealer standing on soft 17. Make the play at the index or higher; below it, do the other thing.</p>
@@ -390,7 +404,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="m"><b>−1</b><span>10 J Q K A</span></div>
   </div>
   <div class="opts">
-    <div class="seg" id="c-mode"><button data-mode="flash">Flash drill</button><button data-mode="table">Casino table</button><button data-mode="deck">Deck countdown</button></div>
+    <div class="seg" id="c-mode"><button data-mode="learn">Learn</button><button data-mode="flash">Flash drill</button><button data-mode="table">Casino table</button><button data-mode="deck">Deck countdown</button></div>
     <div class="opts" id="c-flashopts">
       <div class="opt"><span>Cards at once</span><div class="seg" id="c-per"><button data-per="1">1</button><button data-per="2">2</button><button data-per="3">3</button></div></div>
       <div class="opt"><span>Cards</span><div class="seg" id="c-len"><button data-len="12">12</button><button data-len="24">24</button><button data-len="48">48</button></div></div>
@@ -402,6 +416,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <div class="opt"><span>Background noise</span><div class="seg" id="c-noise"><button data-noise="0">Off</button><button data-noise="1">On</button></div></div>
     </div>
   </div>
+  <div class="box col" id="c-learn" hidden></div>
   <div class="felt">
     <span class="tag" id="c-prog">Ready</span>
     <div class="stage" id="c-stage"></div>
@@ -418,6 +433,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="opt"><span>Shoe</span><div class="seg" id="p-decks"><button data-decks="6">6 decks</button><button data-decks="8">8 decks</button></div></div>
     <div class="opt"><span>Deck marks on the tray</span><div class="seg" id="p-marks"><button data-marks="1">On</button><button data-marks="0">Off</button></div></div>
   </div>
+  <div class="box col" id="p-learn" hidden></div>
   <div class="felt">
     <div class="tcgrid">
       <div style="display:grid;gap:8px;justify-items:center"><div id="p-tray"></div><div class="lbl">Discard tray</div></div>
@@ -576,7 +592,7 @@ const blank=()=>({rules:{h17:false,das:true,sur:true,decks:6},
   strat:{cells:{},recent:[],n:0,streak:0,best:0},dev:{recent:[]},
   count:{best:null,recent:[],per:1,pace:1.2,len:24,tpace:0.45,rounds:5,noise:0},tc:{recent:[],bets:[],marks:true},
   table:{hands:0,decOK:0,decN:0,cntOK:0,cntN:0,betOK:0,betN:0,others:1,every:3,speed:1,dev:0},
-  hist:{},prefs:{fx:true},learn:{cur:'read',done:{}}});
+  hist:{},prefs:{fx:true},learn:{cur:'read',done:{}},clearn:{cur:'values',done:{}}});
 let S=blank();
 try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j)for(const k in S)S[k]={...S[k],...(j[k]||{})}}catch(e){}
 
@@ -730,8 +746,15 @@ function why(kind,n,up,act){
 
 // ---------- strategy drill ----------
 const CELLS=[];for(const[k,a,b]of[['h',8,18],['s',13,20],['p',2,11]])for(let n=a;n<=b;n++)for(let up=2;up<=11;up++)CELLS.push({kind:k,n,up,key:k+n+'-'+up});
-const D={focus:'all',sub:'drill',cur:null,answered:false,timer:0,lstreak:0,lq:{id:'',rows:[]}};
-const isMiss=s=>s&&s.w>0&&s.run<3;
+const D={focus:'all',sub:'drill',cur:null,answered:false,timer:0,lstreak:0,lcount:0,lq:{id:'',rows:[]}};
+// Review schedule. A missed hand is due at once; each correct review pushes it out to 1, 3, 7, 21, then 45 days.
+const DAY=86400000,dayStart=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()};
+const isMiss=s=>!!s&&s.w>0&&(s.due==null?s.run<3:s.due<=Date.now());
+function cellMiss(s){s.w++;s.run=0;s.iv=0;s.due=Date.now()}
+function cellRight(s){const due=isMiss(s);s.r++;s.run++;if(!due)return 0;s.iv=s.iv>=21?45:s.iv>=7?21:s.iv>=3?7:s.iv>=1?3:1;s.due=dayStart()+s.iv*DAY;return s.iv}
+function reviewInfo(){let due=0,next=0;for(const k in S.strat.cells){const s=S.strat.cells[k];if(!s||!s.w)continue;if(isMiss(s))due++;else if(s.due&&(!next||s.due<next))next=s.due}return{due,next}}
+function reviewNote(){const{due,next}=reviewInfo();if(due)return`${due} ${due===1?'hand is':'hands are'} due for review.`;if(!next)return'No hands are due for review.';
+  const d=Math.max(1,Math.round((next-dayStart())/DAY));return`No hands are due right now. The next review is ${d===1?'tomorrow':'in '+d+' days'}.`}
 function makeCards(kind,n){
   if(kind==='p')return[cd(n),cd(n)];
   if(kind==='s')return Math.random()<.5?[cd(11),cd(n-11)]:[cd(n-11),cd(11)];
@@ -740,9 +763,9 @@ function makeCards(kind,n){
   const[a,b]=o[rnd(o.length)];return[cd(a),cd(b)]}
 function pickCell(){
   let list=CELLS.filter(c=>D.focus==='all'||D.focus==='miss'||c.kind===D.focus),note='';
-  if(D.focus==='miss'){const m=list.filter(c=>isMiss(S.strat.cells[c.key]));if(m.length)list=m;else note='No recent misses to review, so this is the full set.'}
-  $('#d-note').textContent=note;
-  const w=list.map(c=>{const s=S.strat.cells[c.key];return(D.cur&&D.cur.key===c.key)?0.01:!s?1.5:isMiss(s)?5:1}),sum=w.reduce((a,b)=>a+b,0);
+  if(D.focus==='miss'){const m=list.filter(c=>isMiss(S.strat.cells[c.key]));if(m.length){list=m;note=reviewNote()}else note=reviewNote()+' Until then this is the full set.'}
+  $('#d-note').textContent=note;const now=Date.now();
+  const w=list.map(c=>{const s=S.strat.cells[c.key];return(D.cur&&D.cur.key===c.key)?0.01:!s?1.5:isMiss(s)?8:s.due>now?0.3:1}),sum=w.reduce((a,b)=>a+b,0);
   let r=Math.random()*sum;for(let i=0;i<list.length;i++){r-=w[i];if(r<=0)return list[i]}return list[list.length-1]}
 // ---------- lessons: the chart, one rule at a time ----------
 // Wording follows the house rules. Every lesson before "Surrender" is graded with surrender switched off.
@@ -796,15 +819,34 @@ function renderLearn(){const L=LESSONS(),l=curLesson(),i=L.findIndex(x=>x.id===l
   <div class="row2" style="justify-content:flex-start">${i>0?'<button class="btn" data-lgo="-1">Previous lesson</button>':''}${i<L.length-1?`<button class="btn ${done[l.id]||!l.target?'primary':''}" data-lgo="1">${l.target?'Next lesson':'Start lesson 2'}</button>`:''}</div>`;
   $('#d-drill').hidden=!l.target}
 $('#d-learn').addEventListener('click',e=>{let b;if(b=e.target.closest('[data-lesson]'))lessonSet(b.dataset.lesson,false);else if(b=e.target.closest('[data-lgo]'))lessonGo(+b.dataset.lgo)});
-function lessonAnswer(c,act,ok){const l=curLesson(),was=!!S.learn.done[l.id],L=LESSONS(),last=L[L.length-1].id===l.id;
+function lessonFinish(c,ok,okHTML,noHTML){const l=curLesson(),was=!!S.learn.done[l.id],L=LESSONS(),last=L[L.length-1].id===l.id;
   if(ok){if(!c.hinted)D.lstreak++}else D.lstreak=0;
   const passed=D.lstreak>=l.target&&!was;if(D.lstreak>=l.target)S.learn.done[l.id]=true;save();
-  const reason=why(c.kind,c.n,c.up,c.want),fb=$('#d-fb');fb.className='fb '+(ok?'ok':'no');
+  const fb=$('#d-fb');fb.className='fb '+(ok?'ok':'no');
   if(passed)fb.innerHTML=`<div><b class="v">Lesson passed.</b> ${l.target} in a row. ${last?'That is the whole chart. Keep it sharp with the drill and the daily workout.':'On to the next one.'}</div><button class="btn primary" id="d-next">${last?'Open the drill':'Next lesson'}<kbd>Space</kbd></button>`;
-  else if(ok)fb.innerHTML=`<div><b class="v">Correct.</b> ${reason}${c.hinted?' Hands where you looked at the rule do not count toward the streak.':''}</div>`;
-  else fb.innerHTML=`<div><b class="v">${ACT[c.want]}</b> is the play, not ${ACT[act].toLowerCase()}. ${reason}${l.id==='exam'?' Revisit the lesson “'+lessonFor(c).t+'”.':''}</div>${miniRow(c.kind,c.n,c.up,c.LR)}<button class="btn primary" id="d-next">Next hand<kbd>Space</kbd></button>`;
+  else fb.innerHTML=ok?okHTML:noHTML+'<button class="btn primary" id="d-next">Next hand<kbd>Space</kbd></button>';
   renderLearn();drillStats();
-  if(passed)$('#d-next').onclick=()=>last?setFocus('all'):lessonGo(1);else if(ok)D.timer=setTimeout(drillNext,900);else $('#d-next').onclick=drillNext}
+  if(passed)$('#d-next').onclick=()=>last?setFocus('all'):lessonGo(1);else if(ok)D.timer=setTimeout(drillNext,c.recall?1100:900);else $('#d-next').onclick=drillNext}
+function lessonAnswer(c,act,ok){const l=curLesson(),reason=why(c.kind,c.n,c.up,c.want);if(!ok&&l.id==='exam')missCell(c.kind,c.n,c.up);
+  lessonFinish(c,ok,`<div><b class="v">Correct.</b> ${reason}${c.hinted?' Hands where you looked at the rule do not count toward the streak.':''}</div>`,
+    `<div><b class="v">${ACT[c.want]}</b> is the play, not ${ACT[act].toLowerCase()}. ${reason}${l.id==='exam'?' Revisit the lesson “'+lessonFor(c).t+'”.':''}</div>${miniRow(c.kind,c.n,c.up,c.LR)}`)}
+// Whole-row recall: name a hand and a play, and the player picks every dealer card it applies to.
+const rowAct=(kind,n,u,R)=>resolve(cellCode(kind,n,u,R),{double:true,split:true,surrender:R.sur});
+function makeRecall(cells,R){const seen={};for(const c of cells)seen[c.kind+c.n]={kind:c.kind,n:c.n};
+  const rows=Object.values(seen).map(r=>{const by={};for(let u=2;u<=11;u++){const a=rowAct(r.kind,r.n,u,R);(by[a]=by[a]||[]).push(u)}return{...r,by}}).filter(r=>Object.keys(r.by).length>1);
+  if(!rows.length)return null;let r;do{r=rows[rnd(rows.length)]}while(rows.length>1&&D.cur&&D.cur.recall&&D.cur.kind===r.kind&&D.cur.n===r.n);
+  const acts=Object.keys(r.by).sort((x,y)=>r.by[x].length-r.by[y].length),pool=acts.slice(0,-1),act=pool[rnd(pool.length)];
+  return{recall:true,kind:r.kind,n:r.n,act,set:r.by[act],key:'r'+r.kind+r.n+act}}
+$('#r-cells').addEventListener('click',e=>{const b=e.target.closest('.rcell');if(b&&!b.disabled)b.setAttribute('aria-pressed',String(b.getAttribute('aria-pressed')!=='true'))});
+function recallCheck(){const c=D.cur;if(!c||!c.recall||D.answered)return;D.answered=true;
+  const sel=$$('#r-cells .rcell[aria-pressed="true"]').map(b=>+b.dataset.u),ok=sel.length===c.set.length&&c.set.every(u=>sel.includes(u));tally(ok);fx(ok?'ok':'no');
+  $$('#r-cells .rcell').forEach(b=>{const on=sel.includes(+b.dataset.u),should=c.set.includes(+b.dataset.u);b.disabled=true;if(on||should)b.classList.add(on&&should?'hit':on?'bad':'miss')});$('#r-check').disabled=true;
+  const names=c.set.map(u=>u===11?'ace':u),txt=`${handName(c.kind,c.n)}: ${ACT[c.act].toLowerCase()} against ${names.length>1?names.slice(0,-1).join(', ')+' and '+names[names.length-1]:names[0]}.`;
+  const okH=`<div><b class="v">Correct.</b> ${txt}</div>`,noH=`<div><b class="v">Not quite.</b> ${txt} Dashed cards are ones you left out.</div>${miniRow(c.kind,c.n,0,c.LR||S.rules)}`;
+  if(c.lesson){lessonFinish(c,ok,okH,noH);return}
+  save();const fb=$('#d-fb');fb.className='fb '+(ok?'ok':'no');fb.innerHTML=ok?okH:noH+'<button class="btn primary" id="d-next">Next row<kbd>Space</kbd></button>';
+  if(ok)D.timer=setTimeout(drillNext,1100);else $('#d-next').onclick=drillNext}
+$('#r-check').onclick=recallCheck;
 $('#d-hint').onclick=()=>{const c=D.cur;if(!c||D.answered||!c.lesson)return;c.hinted=true;const fb=$('#d-fb');fb.className='fb';fb.innerHTML=`<div><b class="v" style="color:var(--print)">The rule:</b> ${why(c.kind,c.n,c.up,c.want)}</div>`};
 
 function drillNext(){clearTimeout(D.timer);D.answered=false;const R=S.rules,les=D.sub==='learn'?curLesson():null;let cur;
@@ -812,42 +854,47 @@ function drillNext(){clearTimeout(D.timer);D.answered=false;const R=S.rules,les=
     // Deal the lesson's rows in rotation so every rule comes up, and lean toward the columns a lesson is about.
     if(D.lq.id!==les.id||!D.lq.rows.length){const rows=[...new Set(list.map(c=>c.kind+c.n))];for(let i=rows.length-1;i>0;i--){const j=rnd(i+1);[rows[i],rows[j]]=[rows[j],rows[i]]}D.lq={id:les.id,rows}}
     const row=D.lq.rows.pop(),inRow=list.filter(c=>c.kind+c.n===row),hot=les.hot&&Math.random()<.6?inRow.filter(c=>les.hot.includes(c.up)):inRow;let c;do{c=hot[rnd(hot.length)]}while(hot.length>1&&D.cur&&D.cur.key===c.key);
-    cur={...c,lesson:les.id,LR,want:resolve(cellCode(c.kind,c.n,c.up,LR),{double:true,split:true,surrender:LR.sur})};$('#d-note').textContent=''}
+    cur={...c,lesson:les.id,LR,want:resolve(cellCode(c.kind,c.n,c.up,LR),{double:true,split:true,surrender:LR.sur})};$('#d-note').textContent='';
+    if(++D.lcount%3===0){const rq=makeRecall(list,LR);if(rq)cur={...rq,lesson:les.id,LR}}}
+  else if(D.focus==='recall'){cur=makeRecall(CELLS,R);$('#d-note').textContent='Whole rows: pick every dealer card the named play applies to.'}
   else if(D.focus==='dev'){const list=I18.filter(d=>d.kind);let d;do{d=list[rnd(list.length)]}while(D.cur&&D.cur.dev===d);
     const tc=d.idx+rnd(7)-3;cur={dev:d,kind:d.kind,n:d.n,up:d.up,tc,want:tc>=d.idx?d.hi:d.lo};$('#d-note').textContent='Deviation drill: no surrender, dealer stands on soft 17.'}
   else{const c=pickCell();cur={...c,want:resolve(cellCode(c.kind,c.n,c.up,R),{double:true,split:true,surrender:R.sur})}}
-  cur.cards=makeCards(cur.kind,cur.n);cur.upCard=cd(cur.up);D.cur=cur;fx('card');const RR=cur.LR||R;
-  $('#d-dealer').innerHTML=cardHTML(cur.upCard,{cls:'in'})+cardHTML({},{back:true});
+  const rec=!!cur.recall;cur.cards=makeCards(cur.kind,cur.n);if(!rec)cur.upCard=cd(cur.up);D.cur=cur;fx('card');const RR=cur.LR||R;
+  $('#d-acts').hidden=rec;$('#d-recall').hidden=!rec;$('#d-hint').hidden=rec||D.sub!=='learn';$('#d-dlbl').textContent=rec?'Dealer could show anything':'Dealer shows';
+  if(rec){$('#r-q').innerHTML=`${handName(cur.kind,cur.n)}: tap every dealer card you <span class="pill a-${cur.act}">${ACT[cur.act].toLowerCase()}</span> against.`;
+    $('#r-cells').innerHTML=[2,3,4,5,6,7,8,9,10,11].map(u=>`<button class="rcell" data-u="${u}" aria-pressed="false" aria-label="Dealer ${u===11?'ace':u}">${u===11?'A':u}</button>`).join('');$('#r-check').disabled=false}
+  $('#d-dealer').innerHTML=rec?cardHTML({},{back:true}):cardHTML(cur.upCard,{cls:'in'})+cardHTML({},{back:true});
   $('#d-hand').innerHTML=cur.cards.map(c=>cardHTML(c,{cls:'in'})).join('');
-  $('#d-name').textContent=handName(cur.kind,cur.n===8&&cur.kind==='h'?total(cur.cards).total:cur.kind==='h'&&cur.n===18?total(cur.cards).total:cur.n)+' vs '+upName(cur.up);
+  $('#d-name').textContent=rec?handName(cur.kind,cur.n):handName(cur.kind,cur.n===8&&cur.kind==='h'?total(cur.cards).total:cur.kind==='h'&&cur.n===18?total(cur.cards).total:cur.n)+' vs '+upName(cur.up);
   const tg=$('#d-tc');tg.hidden=!cur.dev;if(cur.dev)tg.textContent='True count '+fmt(cur.tc);
   $$('#d-acts .act').forEach(b=>{const a=b.dataset.act;b.disabled=(a==='P'&&cur.kind!=='p')||(a==='R'&&(!RR.sur||!!cur.dev))});
-  const fb=$('#d-fb');fb.className='fb';fb.textContent=cur.dev?'The count is '+fmt(cur.tc)+'. Does it change the play?':'What is the play?';
+  const fb=$('#d-fb');fb.className='fb';fb.textContent=rec?'Pick the dealer cards, then check.':cur.dev?'The count is '+fmt(cur.tc)+'. Does it change the play?':'What is the play?';
   drillStats()}
 function miniRow(kind,n,up,R=S.rules){let h='<tr><th class="rh"></th>',r=`<tr><th class="rh">${rowLabel(kind,n)}</th>`;
   for(let u=2;u<=11;u++){const c=cellCode(kind,n,u,R);h+=`<th>${u===11?'A':u}</th>`;r+=`<td class="a-${c[0]} ${u===up?'cur':''}">${c}</td>`}
   return`<div class="chartwrap"><table class="chart">${h}</tr>${r}</tr></table></div>`}
-function drillAnswer(act){const c=D.cur;if(!c||D.answered||D.sub==='chart')return;const RR=c.LR||S.rules;
+function drillAnswer(act){const c=D.cur;if(!c||c.recall||D.answered||D.sub==='chart')return;const RR=c.LR||S.rules;
   if((act==='P'&&c.kind!=='p')||(act==='R'&&(!RR.sur||c.dev)))return;
   D.answered=true;const ok=act===c.want;
   tally(ok);fx(ok?'ok':'no');if(c.lesson){lessonAnswer(c,act,ok);return}
-  if(c.dev)push(S.dev.recent,ok,40);
-  else{const st=S.strat,s=st.cells[c.key]||(st.cells[c.key]={r:0,w:0,run:0});if(ok){s.r++;s.run++}else{s.w++;s.run=0}
+  let back=0;if(c.dev)push(S.dev.recent,ok,40);
+  else{const st=S.strat,s=st.cells[c.key]||(st.cells[c.key]={r:0,w:0,run:0});if(ok)back=cellRight(s);else cellMiss(s);
     push(st.recent,ok,100);st.n++;st.streak=ok?st.streak+1:0;st.best=Math.max(st.best,st.streak)}
   save();
   const reason=c.dev?`The index for ${handName(c.kind,c.n).toLowerCase()} against ${c.up===11?'an ace':'a '+c.up} is ${fmt(c.dev.idx)}. ${ACT[c.dev.hi]} at ${fmt(c.dev.idx)} or higher, otherwise ${ACT[c.dev.lo].toLowerCase()}.`:why(c.kind,c.n,c.up,c.want);
   const fb=$('#d-fb');fb.className='fb '+(ok?'ok':'no');
-  fb.innerHTML=ok?`<div><b class="v">Correct.</b> ${reason}</div>`:`<div><b class="v">${ACT[c.want]}</b> is the play, not ${ACT[act].toLowerCase()}. ${reason}</div>${c.dev?'':miniRow(c.kind,c.n,c.up)}<button class="btn primary" id="d-next">Next hand<kbd>Space</kbd></button>`;
+  fb.innerHTML=ok?`<div><b class="v">Correct.</b> ${reason}${back?` You had missed this one before, so it comes back ${back===1?'tomorrow':'in '+back+' days'}.`:''}</div>`:`<div><b class="v">${ACT[c.want]}</b> is the play, not ${ACT[act].toLowerCase()}. ${reason}${c.dev?'':' It will come back until you get it right, then again tomorrow.'}</div>${c.dev?'':miniRow(c.kind,c.n,c.up)}<button class="btn primary" id="d-next">Next hand<kbd>Space</kbd></button>`;
   drillStats();
   if(ok)D.timer=setTimeout(drillNext,c.dev?1400:800);else $('#d-next').onclick=drillNext;workTick('strategy',ok)}
 function drillStats(){const st=S.strat,dev=D.focus==='dev';
   if(D.sub==='learn'){const l=curLesson(),L=LESSONS();$('#d-stats').innerHTML=`<div class="stat"><b>${Math.min(D.lstreak,l.target)} / ${l.target}</b><span>In a row to pass</span></div><div class="stat"><b>${L.filter(x=>S.learn.done[x.id]).length} / ${L.length}</b><span>Lessons passed</span></div>`;return}
   $('#d-stats').innerHTML=dev?`<div class="stat"><b>${S.dev.recent.length?pct(S.dev.recent)+'%':'–'}</b><span>Last ${S.dev.recent.length||40} deviations</span></div>`
-  :`<div class="stat"><b>${st.streak}</b><span>Streak</span></div><div class="stat"><b>${st.recent.length?pct(st.recent)+'%':'–'}</b><span>Last ${st.recent.length||100} hands</span></div><div class="stat"><b>${st.n}</b><span>Hands drilled</span></div><div class="stat"><b>${st.best}</b><span>Best streak</span></div>`}
+  :`<div class="stat"><b>${st.streak}</b><span>Streak</span></div><div class="stat"><b>${st.recent.length?pct(st.recent)+'%':'–'}</b><span>Last ${st.recent.length||100} hands</span></div><div class="stat"><b>${st.n}</b><span>Hands drilled</span></div><div class="stat"><b>${reviewInfo().due}</b><span>Due for review</span></div>`}
 $('#d-acts').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)drillAnswer(b.dataset.act)});
 $('#d-focus').addEventListener('click',e=>{const b=e.target.closest('[data-focus]');if(!b)return;setFocus(b.dataset.focus)});
 function setFocus(f){D.focus=f;segSet('#d-focus','focus',f);setSub('drill');drillNext()}
-function setSub(s){D.sub=s;segSet('#d-sub','sub',s);$('#d-learn').hidden=s!=='learn';$('#d-chart').hidden=s!=='chart';$('#d-focus').hidden=s!=='drill';$('#d-hint').hidden=s!=='learn';$('#d-drill').hidden=s==='chart';
+function setSub(s){D.sub=s;segSet('#d-sub','sub',s);$('#d-learn').hidden=s!=='learn';$('#d-chart').hidden=s!=='chart';$('#d-focus').hidden=s!=='drill';$('#d-drill').hidden=s==='chart';
   if(s==='chart')renderChart();else if(s==='learn'){D.lstreak=0;renderLearn();drillNext()}else drillNext()}
 $('#d-sub').addEventListener('click',e=>{const b=e.target.closest('[data-sub]');if(b)setSub(b.dataset.sub)});
 
@@ -878,21 +925,85 @@ function stepper(el,label,onSubmit){let v=0;
   el.querySelector('.stepper')._ctl={bump:d=>set(v+d),go}}
 
 // ---------- running count ----------
-const C={mode:'flash',run:0,seq:[],i:0,t0:0,tick:0,state:'idle'};
-function countIdle(){C.run++;clearInterval(C.tick);C.state='idle';NOISE&&NOISE.stop();const m=C.mode;
-  $('#c-flashopts').hidden=m!=='flash';$('#c-tableopts').hidden=m!=='table';$('#c-prog').textContent='Ready';
-  $('#c-stage').innerHTML=`<p class="stage-note">${m==='flash'?'Cards flash at your pace. Keep the count, then enter it when they stop.':m==='table'?'Five hands and a dealer, dealt at casino speed. Hands play out and get swept up, round after round. Keep the count through all of it.':'Count down a full deck against the clock. One card stays face down. Your final count tells you what it is.'}</p>`;
-  $('#c-ctl').innerHTML=`<button class="btn primary" id="c-go">${m==='deck'?'Start the clock':'Deal'}<kbd>Space</kbd></button>`;
-  $('#c-go').onclick=m==='flash'?flashStart:m==='table'?tableDrill:deckStart;countStats()}
+const C={mode:'flash',run:0,seq:[],i:0,t0:0,tick:0,state:'idle',over:null,quiz:false,qt:0};
+// ---------- counting lessons ----------
+// One course across two pages: six lessons practised here, then true count and bets on the True count page.
+const CL={streak:0,tcRun:0,betRun:0,showP:false};
+function CLESSONS(){return[
+  {id:'values',view:'count',practice:'tag',target:20,t:'Three groups, three values',lead:'Hi-Lo sorts all thirteen ranks into three groups. That is the whole system.',
+    rules:['<b>2, 3, 4, 5, 6 count +1.</b> Low cards help the dealer, so each one that leaves the shoe is good for you.','<b>7, 8, 9 count 0.</b> Ignore them.','<b>10, J, Q, K, A count −1.</b> High cards help you, so each one that leaves is bad for you.','Five ranks are +1 and five are −1, so a full deck adds up to exactly zero.'],
+    hook:'Low is plus, high is minus, the middle is nothing.'},
+  {id:'running',view:'count',practice:'seq',params:{per:1,len:8,pace:1.6},target:4,t:'Keep one number',lead:'The running count is a single number you update with every card you see. It starts at zero after the shuffle.',
+    rules:['Say only the total in your head, never the card: plus one, plus two, plus one.','A positive count means more low cards have gone, so what is left is rich in tens and aces. That favors you.','A negative count means the opposite, and the house edge is bigger than usual.'],
+    hook:'Start at zero. Add each card. Hold the number.'},
+  {id:'pairs',view:'count',practice:'pair',target:20,t:'Read cards in pairs',lead:'Fast counters do not add card by card. They read two cards as one shape.',
+    rules:['<b>One low and one high cancel to 0.</b> A 5 and a king together are nothing, so skip them.','<b>Two low cards are +2. Two high cards are −2.</b>','<b>A middle card changes nothing.</b> A 3 and an 8 are just +1.','Most pairs on a table cancel, which is why this is so much faster.'],
+    hook:'Look for the cancel first. Whatever does not cancel is the count.'},
+  {id:'stream',view:'count',practice:'seq',params:{per:2,len:16,pace:1.6},target:3,t:'Pairs in a stream',lead:'Now hold the total while the pairs keep coming.',
+    rules:['Cards arrive two at a time. Net each pair, then add it to your total.','If you lose the number, do not guess. Finish the run and use the replay underneath to see where it slipped.'],
+    hook:'Net the pair, add it, move on.'},
+  {id:'speed',view:'count',practice:'seq',params:{per:1,len:24,pace:0.9},target:3,t:'Get up to table speed',lead:'A dealer puts out a card about every half second. Counting has to stop feeling like work.',
+    rules:['This run is 24 cards, one at a time, a little under a second each.','After this lesson, use Deck countdown to time yourself through a whole deck. Under 30 seconds is the usual benchmark for casino play.'],
+    hook:'Do not say the card. Only the number moves.'},
+  {id:'table',view:'count',practice:'table',params:{rounds:3,tpace:0.7},target:2,t:'Count a real table',lead:'At a table the cards land in different places, hands grow, and everything is swept away at the end of the round.',
+    rules:['Count each card as it lands, in the order the dealer deals.','Count hit cards as they arrive, and the dealer’s hole card when it turns over.','Do not wait for the end of the round. The cards are picked up fast.'],
+    hook:'Count on the way down, not on the way out.'},
+  {id:'tc',view:'true-count',practice:'tc',target:5,t:'From running count to true count',lead:'A running count of +6 means a lot with one deck left and little with five. Dividing by the decks left makes every count comparable.',
+    rules:['<b>True count = running count ÷ decks left in the shoe.</b>','Read the discard tray to see how many decks are gone, take that from the shoe size, and divide.','<b>Round down.</b> With +7 and 2 decks left, 7 ÷ 2 is 3.5, so the true count is +3.','Judging the tray to the nearest half deck is close enough.'],
+    hook:'Running count, divided by decks left, rounded down.'},
+  {id:'bet',view:'true-count',practice:'bet',target:5,t:'Bet with the count',lead:'The count only earns money through bet size: small when the house has the edge, large when you do.',
+    rules:['Each point of true count moves the edge about half a percent toward you. The house starts about half a percent ahead.','<b>True count +1 or less:</b> bet 1 unit. You have no edge yet.','<b>+2:</b> 2 units. <b>+3:</b> 4 units. <b>+4:</b> 6 units. <b>+5 or more:</b> 8 units.'],
+    hook:'The minimum until +2, then step up with every point.'}]}
+const curCL=()=>{const L=CLESSONS();return L.find(l=>l.id===S.clearn.cur)||L[0]};
+const clDone=view=>CLESSONS().filter(l=>!view||l.view===view).every(l=>S.clearn.done[l.id]);
+function clHTML(l){const L=CLESSONS(),i=L.findIndex(x=>x.id===l.id),done=S.clearn.done,st=Math.min(l.practice==='tc'?CL.tcRun:l.practice==='bet'?CL.betRun:CL.streak,l.target),what={tag:'cards',pair:'pairs',seq:'runs',table:'tables',tc:'true counts',bet:'bets'}[l.practice];
+  return`<div class="lsteps">${L.map((x,j)=>`<button class="ldot ${j===i?'on':''} ${done[x.id]?'done':''}" data-cl="${x.id}" title="${x.t}" aria-label="Counting lesson ${j+1}: ${x.t}${done[x.id]?', passed':''}">${j+1}</button>`).join('')}</div>
+  <h3>Counting lesson ${i+1} of ${L.length}${done[l.id]?' · passed':''}</h3><h2>${l.t}</h2><p class="dlg-p" style="font-size:17px;max-width:64ch">${l.lead}</p>
+  <ul class="rules">${l.rules.map(r=>`<li>${r}</li>`).join('')}</ul><p class="hook"><b>Remember it as:</b> ${l.hook}</p>
+  <div class="lprog"><div class="meter" role="img" aria-label="${st} of ${l.target} in a row"><i style="width:${st/l.target*100}%"></i></div><span class="goal">${done[l.id]?'Passed. ':''}In a row: ${st} of ${l.target} ${what}. Practice below.</span></div>
+  <div class="row2" style="justify-content:flex-start">${i>0?`<button class="btn" data-clgo="-1" data-from="${l.id}">Previous lesson</button>`:''}${i<L.length-1?`<button class="btn ${done[l.id]?'primary':''}" data-clgo="1" data-from="${l.id}">Next lesson</button>`:''}</div>`}
+function renderCLearn(){const l=curCL(),box=$('#c-learn'),pbox=$('#p-learn');box.hidden=C.mode!=='learn';if(!box.hidden)box.innerHTML=clHTML(l);
+  const pl=l.view==='true-count'&&(CL.showP||!S.clearn.done[l.id])?l:CLESSONS().find(x=>x.view==='true-count'&&!S.clearn.done[x.id]);pbox.hidden=!pl;if(pl)pbox.innerHTML=clHTML(pl)}
+function clSet(id,scroll){S.clearn.cur=id;CL.streak=0;CL.showP=true;save();const l=curCL(),box=l.view==='count'?'#c-learn':'#p-learn';
+  if(l.view==='count'){C.mode='learn';segSet('#c-mode','mode','learn')}
+  countIdle();if(cur!==l.view)location.hash='#'+l.view;else if(scroll)$(box).scrollIntoView({block:'start',behavior:'smooth'})}
+function clGo(from,d){const L=CLESSONS(),i=Math.max(0,L.findIndex(l=>l.id===from));clSet(L[Math.max(0,Math.min(L.length-1,i+d))].id,true)}
+for(const id of['#c-learn','#p-learn'])$(id).addEventListener('click',e=>{let b;if(b=e.target.closest('[data-cl]'))clSet(b.dataset.cl,false);else if(b=e.target.closest('[data-clgo]'))clGo(b.dataset.from,+b.dataset.clgo)});
+// One graded attempt in a count lesson. Returns true the moment the lesson is passed.
+function clTick(ok){if(C.mode!=='learn')return false;const l=curCL(),was=!!S.clearn.done[l.id];CL.streak=ok?CL.streak+1:0;const passed=CL.streak>=l.target&&!was;
+  if(CL.streak>=l.target)S.clearn.done[l.id]=true;save();renderCLearn();$('#c-prog').textContent=`In a row: ${Math.min(CL.streak,l.target)} of ${l.target}`;return passed}
+function clAfter(ok){if(!clTick(ok))return;const b=$('#c-go'),id=curCL().id;b.firstChild.textContent='Next lesson';b.onclick=()=>clGo(id,1);
+  b.insertAdjacentHTML('beforebegin','<div class="fb ok"><div><b class="v">Lesson passed.</b> On to the next one.</div></div>')}
+// Value quiz for the first lessons: one card (tap its value) or two cards (tap what the pair nets to).
+function tagNext(){clearTimeout(C.qt);const l=curCL(),pair=l.practice==='pair',card=()=>({r:RANKS[rnd(13)],s:rnd(4)}),cards=pair?[card(),card()]:[card()];
+  C.q={cards,want:cards.reduce((a,c)=>a+hilo(c.r),0)};C.quiz=true;fx('card');
+  $('#c-stage').innerHTML=`<div class="spread">${cards.map(c=>cardHTML(c,{cls:'in'})).join('')}</div>`;$('#c-prog').textContent=`In a row: ${Math.min(CL.streak,l.target)} of ${l.target}`;
+  $('#c-ctl').innerHTML=`<div class="st-l">${pair?'What do these two add up to?':'What does this card count?'}</div><div class="row2">${(pair?[2,1,0,-1,-2]:[1,0,-1]).map(v=>`<button class="btn sq" data-tag="${v}">${fmt(v)}</button>`).join('')}</div><div class="goal" id="c-qfb">&nbsp;</div>`}
+function tagAnswer(v){if(!C.quiz)return;C.quiz=false;const q=C.q,ok=v===q.want,l=curCL();tally(ok);fx(ok?'ok':'no');const passed=clTick(ok);
+  if(passed){$('#c-ctl').innerHTML=`<div class="fb ok"><div><b class="v">Lesson passed.</b> ${l.target} in a row.</div></div><button class="btn primary" id="c-go">Next lesson<kbd>Space</kbd></button>`;$('#c-go').onclick=()=>clGo(l.id,1);return}
+  if(ok){$('#c-qfb').textContent='Correct.';C.qt=setTimeout(tagNext,380);return}
+  const explain=q.cards.map(c=>`${c.r} counts ${fmt(hilo(c.r))}`).join(', ')+(q.cards.length>1?`, so the pair is ${fmt(q.want)}`:'')+'.';
+  $('#c-ctl').innerHTML=`<div class="fb no"><div><b class="v">${fmt(q.want)}.</b> ${explain}</div></div><button class="btn primary" id="c-go">Next<kbd>Space</kbd></button>`;$('#c-go').onclick=tagNext}
+$('#c-ctl').addEventListener('click',e=>{const b=e.target.closest('[data-tag]');if(b)tagAnswer(+b.dataset.tag)});
+function countIdle(){C.run++;clearInterval(C.tick);clearTimeout(C.qt);C.state='idle';C.quiz=false;NOISE&&NOISE.stop();const m=C.mode,l=m==='learn'?curCL():null;
+  $('#c-flashopts').hidden=m!=='flash';$('#c-tableopts').hidden=m!=='table';$('#c-prog').textContent='Ready';C.over=l&&l.params||null;renderCLearn();countStats();
+  const note=t=>{$('#c-stage').innerHTML=`<p class="stage-note">${t}</p>`},go=(label,fn)=>{$('#c-ctl').innerHTML=`<button class="btn primary" id="c-go">${label}<kbd>Space</kbd></button>`;$('#c-go').onclick=fn};
+  if(l&&l.view!=='count'){note('This lesson is practised with the discard tray on the True count page.');$('#c-ctl').innerHTML='<a class="btn primary" style="text-decoration:none" href="#true-count">Go to the True count page</a>';return}
+  if(l&&(l.practice==='tag'||l.practice==='pair')){tagNext();return}
+  const kind=l?l.practice:m;
+  if(kind==='seq'){note(`${l.params.len} cards, ${l.params.per===1?'one at a time':'two at a time'}. Keep the count, then enter it when they stop.`);go('Deal',flashStart)}
+  else if(kind==='flash'){note('Cards flash at your pace. Keep the count, then enter it when they stop.');go('Deal',flashStart)}
+  else if(kind==='table'){note('Five hands and a dealer, dealt at casino speed. Hands play out and get swept up, round after round. Keep the count through all of it.');go('Deal',tableDrill)}
+  else{note('Count down a full deck against the clock. One card stays face down. Your final count tells you what it is.');go('Start the clock',deckStart)}}
 // Casino table: a full round to five spots and the dealer, played by the book, swept up, repeated.
-async function tableDrill(){const my=++C.run,pace=S.count.tpace*1000,R=S.rules,SP=5,shoe=newShoe(6);let pos=0,dealer=[],spots=[];C.state='run';C.rounds=[];
+async function tableDrill(){const my=++C.run,o=C.over||S.count,pace=o.tpace*1000,rounds=o.rounds,R=S.rules,SP=5,shoe=newShoe(6);let pos=0,dealer=[],spots=[];C.state='run';C.rounds=[];
   const nap=async m=>{await sleep(m);if(C.run!==my)throw 0};
   const paint=()=>{$('#c-stage').innerHTML=`<div class="ctable"><div class="hand">${cardsHTML(dealer)}</div><div class="cspots">${spots.map(h=>`<div class="hand">${cardsHTML(h)}</div>`).join('')}</div></div>`;
     for(const c of dealer)c.fresh=false;for(const h of spots)for(const c of h)c.fresh=false};
   const draw=async(hand,hidden,m=1)=>{hand.push({...shoe[pos++],fresh:true,hidden:!!hidden});fx('card');paint();await nap(pace*m)};
-  if(S.count.noise)noiseStart();
+  if(S.count.noise&&!C.over)noiseStart();
   $('#c-ctl').innerHTML='<button class="btn" id="c-stop">Stop</button>';$('#c-stop').onclick=countIdle;
-  try{for(let r=0;r<S.count.rounds;r++){dealer=[];spots=[...Array(SP)].map(()=>[]);$('#c-prog').textContent=`Round ${r+1} of ${S.count.rounds}`;
+  try{for(let r=0;r<rounds;r++){dealer=[];spots=[...Array(SP)].map(()=>[]);$('#c-prog').textContent=`Round ${r+1} of ${rounds}`;
       for(let k=0;k<2;k++){for(const h of spots)await draw(h);await draw(dealer,k===1)}
       const up=val(dealer[0].r),dBJ=up>=10&&total(dealer).total===21;
       if(!dBJ)for(const h of spots)for(;;){if(total(h).total>=21)break;const a=best(h,up,R,{double:h.length===2,split:false,surrender:false});if(a==='S')break;await draw(h,false,1.15);if(a==='D')break}
@@ -900,23 +1011,23 @@ async function tableDrill(){const my=++C.run,pace=S.count.tpace*1000,R=S.rules,S
       if(!dBJ&&spots.some(h=>total(h).total<=21))for(;;){const t=total(dealer);if(t.total>17||(t.total===17&&!(t.soft&&R.h17)))break;await draw(dealer,false,1.3)}
       C.rounds.push([...spots.flat(),...dealer].reduce((a,c)=>a+hilo(c.r),0));await nap(pace*2.2);
       for(let i=SP-1;i>=0;i--){spots[i]=[];paint();await nap(pace*.45)}dealer=[];paint();await nap(pace*.8)}
-    NOISE&&NOISE.stop();C.state='ask';$('#c-stage').innerHTML='<div class="stage-q">?</div>';$('#c-prog').textContent=S.count.rounds+' rounds dealt';
+    NOISE&&NOISE.stop();C.state='ask';$('#c-stage').innerHTML='<div class="stage-q">?</div>';$('#c-prog').textContent=rounds+' rounds dealt';
     stepper($('#c-ctl'),'What is the running count?',ans=>{const rc=C.rounds.reduce((a,b)=>a+b,0),ok=ans===rc;push(S.count.recent,ok,20);tally(ok);fx(ok?'ok':'no');save();C.state='done';
       let run=0;$('#c-stage').innerHTML=`<div class="stage-q">${fmt(rc)}</div>`;
       $('#c-ctl').innerHTML=`<div class="fb ${ok?'ok':'no'}" style="justify-items:center"><div><b class="v">${ok?'Correct.':'The count was '+fmt(rc)+'.'}</b> ${ok?'Round by round:':'You said '+fmt(ans)+'. Round by round:'}</div><div class="audit">${C.rounds.map((d,i)=>{run+=d;return`<div class="au"><span>Round ${i+1}</span>${hlTag(d)}<span class="run">${fmt(run)}</span></div>`}).join('')}</div></div><button class="btn primary" id="c-go">Deal again<kbd>Space</kbd></button>`;
-      $('#c-go').onclick=tableDrill;countStats();workTick('count',ok)})}
+      $('#c-go').onclick=tableDrill;countStats();workTick('count',ok);clAfter(ok)})}
   catch(e){if(e!==0)throw e}}
 function countStats(){const c=S.count;$('#c-stats').innerHTML=`<div class="stat"><b>${c.recent.length?pct(c.recent)+'%':'–'}</b><span>Last ${c.recent.length||20} count drills</span></div><div class="stat"><b>${c.best?c.best.toFixed(1)+' s':'–'}</b><span>Best deck time</span></div><div class="stat"><b>30.0 s</b><span>Casino-ready pace</span></div>`}
 function auditHTML(seq){let run=0;return`<div class="audit">${seq.map(c=>{const v=hilo(c.r);run+=v;return`<div class="au">${cardHTML(c,{cls:'mini'})}${hlTag(v)}<span class="run">${fmt(run)}</span></div>`}).join('')}</div>`}
-async function flashStart(){const my=++C.run,per=S.count.per,len=S.count.len;C.seq=newShoe(6).slice(0,len);C.state='run';
+async function flashStart(){const my=++C.run,o=C.over||S.count,per=o.per,len=o.len;C.seq=newShoe(6).slice(0,len);C.state='run';
   $('#c-ctl').innerHTML='<button class="btn" id="c-stop">Stop</button>';$('#c-stop').onclick=countIdle;
   for(let i=0;i<len;i+=per){$('#c-stage').innerHTML=`<div class="spread">${C.seq.slice(i,i+per).map(c=>cardHTML(c,{cls:'in'})).join('')}</div>`;
-    $('#c-prog').textContent=Math.min(i+per,len)+' / '+len;fx('card');await sleep(S.count.pace*1000);if(C.run!==my)return}
+    $('#c-prog').textContent=Math.min(i+per,len)+' / '+len;fx('card');await sleep(o.pace*1000);if(C.run!==my)return}
   C.state='ask';$('#c-stage').innerHTML='<div class="stage-q">?</div>';$('#c-prog').textContent=len+' cards dealt';
   stepper($('#c-ctl'),'What is the running count?',ans=>{const rc=C.seq.reduce((a,c)=>a+hilo(c.r),0),ok=ans===rc;push(S.count.recent,ok,20);tally(ok);fx(ok?'ok':'no');save();C.state='done';workTick('count',ok);
     $('#c-stage').innerHTML=`<div class="stage-q">${fmt(rc)}</div>`;
     $('#c-ctl').innerHTML=`<div class="fb ${ok?'ok':'no'}" style="justify-items:center"><div><b class="v">${ok?'Correct.':'The count was '+fmt(rc)+'.'}</b> ${ok?'Each card, its value, and the count after it:':'You said '+fmt(ans)+'. Find where you slipped:'}</div>${auditHTML(C.seq)}</div><button class="btn primary" id="c-go">Deal again<kbd>Space</kbd></button>`;
-    $('#c-go').onclick=flashStart;countStats()})}
+    $('#c-go').onclick=flashStart;countStats();clAfter(ok)})}
 function deckShow(){fx('card');$('#c-stage').innerHTML=`<div class="spread">${cardHTML(C.seq[C.i],{cls:'in'})}</div>`}
 function deckStart(){C.run++;const deck=newShoe(1);C.hid=deck.pop();C.seq=deck;C.i=0;C.t0=performance.now();C.state='deck';deckShow();
   clearInterval(C.tick);C.tick=setInterval(()=>{$('#c-prog').textContent=`${C.i+1} / 51 · ${((performance.now()-C.t0)/1000).toFixed(1)} s`},100);
@@ -951,8 +1062,11 @@ function tcNew(){const decks=S.rules.decks,dealt=(1+rnd(decks*1.5))/2,left=decks
     $('#p-ctl').innerHTML=`<div class="st-l">True count ${fmt(ans)}. How many units do you bet?</div>${chipsHTML()}`;
     $$('#p-ctl [data-bet]').forEach(b=>b.onclick=()=>tcGrade(+b.dataset.bet))});tcStats()}
 function tcGrade(bet){const p=P.cur,fl=Math.floor(p.exact),okT=p.ans===fl||p.ans===Math.round(p.exact),okB=bet===ramp(fl)||bet===ramp(Math.round(p.exact));
-  push(S.tc.recent,okT,20);push(S.tc.bets,okB,20);const ok=okT&&okB;tally(ok);fx(ok?'ok':'no');save();workTick('true-count',ok);
+  push(S.tc.recent,okT,20);push(S.tc.bets,okB,20);const ok=okT&&okB;tally(ok);fx(ok?'ok':'no');
+  const hadT=!!S.clearn.done.tc,hadB=!!S.clearn.done.bet;CL.tcRun=okT?CL.tcRun+1:0;CL.betRun=okB?CL.betRun+1:0;if(CL.tcRun>=5)S.clearn.done.tc=true;if(CL.betRun>=5)S.clearn.done.bet=true;
+  const lessonPassed=(!hadT&&S.clearn.done.tc)||(!hadB&&S.clearn.done.bet);save();renderCLearn();workTick('true-count',ok);
   $('#p-ctl').innerHTML=`<div class="fb ${ok?'ok':'no'}"><div><b class="v">${ok?'Correct.':okT?'Right count, wrong bet.':okB?'Right bet, wrong count.':'Not this time.'}</b> ${p.dealt} ${p.dealt===1?'deck':'decks'} in the tray leaves ${p.left}. ${fmt(p.rc)} ÷ ${p.left} = ${p.exact.toFixed(1).replace('-','−')}, so the true count is ${fmt(fl)} and the bet is ${units(ramp(fl))}.</div></div><button class="btn primary" id="p-next">Next tray<kbd>Space</kbd></button>`;
+  if(lessonPassed)$('#p-ctl .fb div').insertAdjacentHTML('beforeend',' <b class="v" style="color:var(--good)">Counting lesson passed.</b>');
   $('#p-next').onclick=tcNew;tcStats()}
 function tcStats(){const t=S.tc;$('#p-stats').innerHTML=`<div class="stat"><b>${t.recent.length?pct(t.recent)+'%':'–'}</b><span>True count, last ${t.recent.length||20}</span></div><div class="stat"><b>${t.bets.length?pct(t.bets)+'%':'–'}</b><span>Bets, last ${t.bets.length||20}</span></div>`}
 $('#p-marks').addEventListener('click',e=>{const b=e.target.closest('[data-marks]');if(!b)return;S.tc.marks=b.dataset.marks==='1';save();segSet('#p-marks','marks',S.tc.marks?1:0);if(P.cur)$('#p-tray').innerHTML=trayHTML(P.cur.dealt,P.cur.decks,S.tc.marks)});
@@ -964,7 +1078,7 @@ const T={run:0,shoe:[],pos:0,cut:0,rc:0,dealer:[],seats:[],net:0,round:0,prompt:
 const TLBL={dec:'Play',bet:'Bet',cnt:'Count'};
 // Record one graded moment at the table: shoe totals, the mistake list for the review, and today's tally.
 function tnote(type,ok,text){const s=T.shoeN;s[type][1]++;if(ok)s[type][0]++;else T.log.push({hand:s.hands+(type==='cnt'?0:1),label:TLBL[type],text});tally(ok)}
-function missCell(kind,n,up){if(kind==='s'&&(n<13||n>20))return;const k=kind+(kind==='h'?Math.max(8,Math.min(18,n)):n)+'-'+up,c=S.strat.cells[k]||(S.strat.cells[k]={r:0,w:0,run:0});c.w++;c.run=0}
+function missCell(kind,n,up){if(kind==='s'&&(n<13||n>20))return;const k=kind+(kind==='h'?Math.max(8,Math.min(18,n)):n)+'-'+up,c=S.strat.cells[k]||(S.strat.cells[k]={r:0,w:0,run:0});cellMiss(c)}
 // The Illustrious 18 entry that governs this hand, if any. Splits and available surrenders stay as the chart says.
 function devFor(cards,up,can,code,R){if(code==='P'||code[0]==='R')return null;const t=total(cards),tens=cards.length===2&&val(cards[0].r)===10&&val(cards[1].r)===10;
   for(const d of I18){if(d.ins||d.up!==up)continue;
@@ -1079,8 +1193,8 @@ for(const[id,key]of[['others','others'],['every','every'],['speed','speed'],['de
 const STEPS=[
   {href:'strategy',t:'Basic strategy',p:'Short lessons teach the chart one rule at a time, then the drill makes it automatic. Played perfectly it trims the house edge to about half a percent. The count adds nothing until this is automatic.',goal:'98% over your last 100 hands',go:()=>courseDone()?'Drill strategy':'Learn strategy',
     prog:()=>{const r=S.strat.recent,L=LESSONS(),nd=L.filter(l=>S.learn.done[l.id]).length;if(nd<L.length)return{v:nd/L.length/2,label:`Lessons ${nd} of ${L.length}`,done:false};return{v:r.length?pct(r)/100*Math.min(1,r.length/100):0,label:r.length?`${pct(r)}% over ${r.length}`:'Not started',done:r.length>=100&&pct(r)>=98}}},
-  {href:'count',t:'Running count',p:'Hi-Lo: cards 2 through 6 count +1, 7 through 9 count 0, tens and aces count −1. Keep one number in your head as the cards come out.',goal:'A full deck in 30 seconds',go:'Drill the count',
-    prog:()=>{const b=S.count.best;return{v:b?Math.min(1,30/b):0,label:b?`Best deck ${b.toFixed(1)} s`:'Not started',done:!!b&&b<=30}}},
+  {href:'count',t:'Running count',p:'Hi-Lo: cards 2 through 6 count +1, 7 through 9 count 0, tens and aces count −1. Keep one number in your head as the cards come out.',goal:'A full deck in 30 seconds',go:()=>clDone('count')?'Drill the count':'Learn to count',
+    prog:()=>{const b=S.count.best,L=CLESSONS().filter(l=>l.view==='count'),nd=L.filter(l=>S.clearn.done[l.id]).length;if(nd<L.length&&!b)return{v:nd/L.length/2,label:`Lessons ${nd} of ${L.length}`,done:false};return{v:b?Math.min(1,30/b):0,label:b?`Best deck ${b.toFixed(1)} s`:'Not started',done:!!b&&b<=30}}},
   {href:'true-count',t:'True count and bets',p:'Divide the running count by the decks still in the shoe. That number tells you how big your edge is, and how much to put out.',goal:'90% over your last 20 trays',go:'Drill conversions',
     prog:()=>{const r=S.tc.recent,b=S.tc.bets,a=r.length?Math.min(pct(r),pct(b)):0;return{v:a/100*Math.min(1,r.length/20),label:r.length?`${a}% over ${r.length}`:'Not started',done:r.length>=20&&a>=90}}},
   {href:'table',t:'Live table',p:'Everything at once. Play a full shoe while the trainer grades every decision, checks your count, and audits your bets.',goal:'100 hands at 98% with the count intact',go:'Sit down',
@@ -1092,7 +1206,7 @@ const WSTEPS=[{view:'strategy',label:'Strategy',target:25,unit:'hands'},{view:'c
 const W={on:false,i:0,n:0,res:[],last:null,timer:0};
 function workStart(){clearTimeout(W.timer);Object.assign(W,{on:true,i:0,n:0,last:null,res:WSTEPS.map(()=>({ok:0,n:0}))});workGo()}
 function workGo(){const s=WSTEPS[W.i];if(s.view==='strategy')setFocus('all');
-  if(s.view==='count'&&C.mode==='deck'){C.mode='flash';segSet('#c-mode','mode','flash');countIdle()}
+  if(s.view==='count'&&C.mode!=='flash'&&C.mode!=='table'){C.mode='flash';segSet('#c-mode','mode','flash');countIdle()}
   location.hash='#'+s.view;workBar()}
 function workNext(){clearTimeout(W.timer);if(!W.on)return;W.i++;W.n=0;
   if(W.i<WSTEPS.length){workGo();return}
@@ -1121,7 +1235,8 @@ function histChart(){const days=[],t=new Date(),lab=d=>d.toLocaleDateString([],{
   <table class="sr"><caption>Share of answers correct by day</caption>${days.filter(p=>p.acc!=null).map(p=>`<tr><th>${lab(p.d)}</th><td>${Math.round(p.acc)}%</td><td>${p.n} answers</td></tr>`).join('')}</table>`}
 function dailyHTML(){const h=S.hist[today()]||{ok:0,n:0},done=!!h.w;
   return`<div class="box daily"><div class="col"><h3>Daily workout</h3><h2>${done?'Done for today.':'About ten minutes, every day.'}</h2>
-  <p class="dlg-p">25 strategy hands, 2 count drills, 5 true-count trays, then 10 hands at the live table. Hands you have missed come up more often.</p>
+  <p class="dlg-p">25 strategy hands, 2 count drills, 5 true-count trays, then 10 hands at the live table. Hands you have missed come back on a schedule until they stick.</p>
+  <p class="goal">${reviewNote()}</p>
   ${W.last?`<p class="goal">Last run: ${WSTEPS.map((s,i)=>s.label+' '+W.last[i].ok+'/'+W.last[i].n).join(' · ')}</p>`:''}
   <div class="stats"><div class="stat"><b>${streak()}</b><span>Day streak</span></div><div class="stat"><b>${h.n}</b><span>Answers today</span></div><div class="stat"><b>${h.n?Math.round(h.ok/h.n*100)+'%':'–'}</b><span>Correct today</span></div></div>
   <button class="btn primary" id="w-start" style="justify-self:start">${W.on?'Restart the workout':done?'Run it again':'Start today’s workout'}</button></div>
@@ -1132,7 +1247,8 @@ function chartTip(e){const tip=$('#daily .tip');if(!tip)return;const r=e.target.
 for(const ev of['pointermove','pointerdown','pointerleave'])$('#daily').addEventListener(ev,chartTip);
 function renderPath(){$('#daily').innerHTML=dailyHTML();$('#w-start').onclick=workStart;
   $('#steps').innerHTML=STEPS.map((s,i)=>{const p=s.prog();return`<li class="step ${p.done?'done':''}"><div class="body"><h2>${s.t}</h2><p>${s.p}</p><div class="meter" role="img" aria-label="Progress ${Math.round(p.v*100)}%"><i style="width:${Math.round(p.v*100)}%"></i></div><div class="goal">${p.done?'Passed':'Pass mark: '+s.goal} · ${p.label}</div></div><a class="btn" style="text-decoration:none;white-space:nowrap" href="#${s.href}" data-step="${i}">${typeof s.go==='function'?s.go():s.go}</a></li>`}).join('')}
-$('#steps').addEventListener('click',e=>{const a=e.target.closest('[data-step]');if(!a)return;const s=STEPS[+a.dataset.step];if(s.href!=='strategy')return;if(s.focus)setFocus(s.focus);else if(courseDone())setFocus('all');else setSub('learn')});
+$('#steps').addEventListener('click',e=>{const a=e.target.closest('[data-step]');if(!a)return;const s=STEPS[+a.dataset.step];if(s.href==='count'){C.mode=clDone('count')?(C.mode==='learn'?'flash':C.mode):'learn';segSet('#c-mode','mode',C.mode);countIdle();return}
+  if(s.href!=='strategy')return;if(s.focus)setFocus(s.focus);else if(courseDone())setFocus('all');else setSub('learn')});
 (function demo(){const cs=[{r:'5',s:2},{r:'K',s:0},{r:'8',s:3},{r:'3',s:1},{r:'A',s:0},{r:'6',s:3}];
   $('#demo').innerHTML=arcSVG('BLACKJACK PAYS 3 TO 2','Low cards out, count up · High cards out, count down')+`<div class="demo-row">${cs.map(c=>`<div class="cell">${cardHTML(c)}${hlTag(hilo(c.r))}</div>`).join('')}</div><div class="lbl">Running count after six cards: <span class="num" style="color:var(--print);font-size:15px">${fmt(cs.reduce((a,c)=>a+hilo(c.r),0))}</span></div>`})();
 let armed=0;$('#reset').onclick=e=>{if(Date.now()-armed<4000){S=blank();save();e.target.textContent='Progress erased';renderPath();armed=0;return}armed=Date.now();e.target.textContent='Click again to erase everything'};
@@ -1144,7 +1260,9 @@ function route(){let v=location.hash.slice(1);if(!VIEWS.includes(v))v='path';cur
   $$('.tabs a').forEach(a=>a.getAttribute('href')==='#'+v?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'));
   if(v==='path')renderPath();
   workBar();
-  if(v!=='count'&&C.state!=='idle')countIdle();
+  if(v!=='count'&&(C.state!=='idle'||C.quiz)){C.run++;clearInterval(C.tick);clearTimeout(C.qt);C.state='idle';C.quiz=false;NOISE&&NOISE.stop()}
+  if(v==='count'&&C.state==='idle'&&!C.quiz)countIdle();
+  if(v==='true-count')renderCLearn();
   if(v==='table'&&!T.started)tStart();
   if(v==='true-count'){segSet('#p-decks','decks',S.rules.decks)}
   window.scrollTo(0,0)}
@@ -1158,7 +1276,7 @@ document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||$('#a
     if(k==='enter'){e.preventDefault();STEP.go();return}}
   if(go&&e.target.closest('button,a,summary'))return;
   const click=id=>{const b=$(id);if(b){e.preventDefault();b.click();return true}};
-  if(cur==='strategy'&&D.sub!=='chart'){if(ACT[k.toUpperCase()])drillAnswer(k.toUpperCase());else if(go)click('#d-next')}
+  if(cur==='strategy'&&D.sub!=='chart'){if(ACT[k.toUpperCase()])drillAnswer(k.toUpperCase());else if(go){click('#d-next')||(!$('#d-recall').hidden&&click('#r-check'))}}
   else if(cur==='count'&&go){click('#c-nx')||click('#c-go')}
   else if(cur==='true-count'&&go)click('#p-next');
   else if(cur==='table'&&T.prompt&&T.prompt.kind==='play'&&ACT[k.toUpperCase()]&&T.prompt.can[k.toUpperCase()])T.prompt.res(k.toUpperCase())});
@@ -1170,11 +1288,11 @@ function syncControls(){
   segSet('#t-others','others',S.table.others);segSet('#t-every','every',S.table.every);segSet('#t-speed','speed',S.table.speed);segSet('#t-dev','dev',S.table.dev);
   segSet('#c-tpace','tpace',S.count.tpace);segSet('#c-rounds','rounds',S.count.rounds);segSet('#c-noise','noise',S.count.noise);fxUI()}
 // Re-draw everything that shows saved state, after progress arrives from the account.
-function refreshAll(rulesChanged,decksChanged){syncControls();renderRules();renderChart();if(D.sub==='learn')renderLearn();
+function refreshAll(rulesChanged,decksChanged){syncControls();renderRules();renderChart();if(D.sub==='learn')renderLearn();renderCLearn();
   if(rulesChanged){$('#d-arc').innerHTML=ruleArc();$('#t-arc').innerHTML=ruleArc();drillNext();tcNew()}else{drillStats();tcStats()}
   countStats();if(decksChanged&&T.started)tStart();else tHud();if(cur==='path')renderPath()}
 renderRules();$('#d-arc').innerHTML=ruleArc();$('#t-arc').innerHTML=ruleArc();
-segSet('#d-focus','focus','all');segSet('#c-mode','mode','flash');syncControls();
+segSet('#d-focus','focus','all');C.mode=clDone('count')?'flash':'learn';segSet('#c-mode','mode',C.mode);syncControls();
 $('#ramp').innerHTML=[['+1 or less',1],['+2',2],['+3',4],['+4',6],['+5 or more',8]].map(([l,u])=>`<div class="chipcol"><span class="chip u${u}">${u}</span>${l}</div>`).join('');
 renderChart();setSub(courseDone()?'drill':'learn');countIdle();tcNew();tRender();route();initAccount();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
